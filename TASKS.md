@@ -1,0 +1,24 @@
+# LectureMindAI Build Checklist
+
+- [ ] 1. Project scaffolding
+- [ ] 2. Backend skeleton
+- [ ] 3. PDF upload + text extraction
+- [ ] 4. Chunking utility
+- [ ] 5. Embedding + ChromaDB text_chunks
+- [ ] 6. Ollama integration
+- [ ] 7. /query endpoint (PDF RAG)
+- [ ] 8. Audio ingestion
+- [ ] 9. Video ingestion
+- [ ] 10. URL ingestion (yt-dlp)
+- [ ] 11. Cross-modal retrieval
+- [ ] 12. SQLite chat history
+- [ ] 13. /documents list + DELETE
+- [ ] 14. Frontend scaffold
+- [ ] 15. Upload UI
+- [ ] 16. Chat UI
+- [ ] 17. Document sidebar
+- [ ] 18. Backend tests
+- [ ] 19. Security hardening
+- [ ] 20. Documentation
+- [ ] 21. Docker
+- [ ] 22. Deployment docs
