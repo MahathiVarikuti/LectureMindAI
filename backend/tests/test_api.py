@@ -41,13 +41,34 @@ class TestChunking:
         assert chunk_text("   ") == []
 
     def test_short_text(self):
-        assert chunk_text("hello") == ["hello"]
+        result = chunk_text("hello")
+        assert len(result) == 1
+        assert result[0]["text"] == "hello"
 
     def test_overlap(self):
         text = "a" * 2500
         chunks = chunk_text(text, chunk_size=1000, chunk_overlap=200)
         assert len(chunks) >= 2
-        assert all(len(c) <= 1000 for c in chunks)
+        assert all(len(c["text"]) <= 1000 for c in chunks)
+        assert all("section" in c for c in chunks)
+
+    def test_resume_sections_are_split(self):
+        text = """Resume
+Name: Aisha Khan
+Education: B.S. Computer Science, LUMS, 2021
+Experience: Senior Product Engineer at BrightLabs, 2022-2024
+Skills: Python, FastAPI, SQL, machine learning
+Projects: LectureMindAI, an AI assistant for lecture notes.
+Certifications: AWS, Google Cloud
+"""
+        chunks = chunk_text(text, chunk_size=220, chunk_overlap=40)
+        assert len(chunks) >= 4
+        # Verify each chunk has text and section
+        assert all("text" in c and "section" in c for c in chunks)
+        # Check that specific content appears in the chunks
+        chunk_texts = [c["text"] for c in chunks]
+        assert any("Projects:" in t and "LectureMindAI" in t for t in chunk_texts)
+        assert any("Education:" in t and "LUMS" in t for t in chunk_texts)
 
 
 class TestHealth:
@@ -73,6 +94,15 @@ class TestUploadValidation:
             files={"file": ("test.pdf", b"%PDF", "application/pdf")},
         )
         assert resp.status_code == 400
+
+    def test_session_must_be_uuid_v4(self, client):
+        resp = client.post(
+            "/upload",
+            data={"session_id": "123e4567-e89b-12d3-a456-426614174000"},
+            files={"file": ("test.pdf", b"%PDF", "application/pdf")},
+        )
+        assert resp.status_code == 400
+        assert "UUID v4" in resp.json()["detail"]
 
 
 class TestSessionIsolation:
@@ -139,6 +169,41 @@ class TestEmptyContextGuard:
         assert resp.status_code == 200
         assert "could not find" in resp.json()["answer"].lower()
         mock_llm.assert_not_called()
+
+    @patch("app.services.query_service.verify_answer_grounding", new_callable=AsyncMock)
+    @patch("app.services.query_service.embed_query", return_value=[0.0] * 384)
+    @patch("app.services.query_service.embed_text_clip", return_value=[0.0] * 512)
+    @patch("app.services.query_service.query_text_chunks")
+    @patch("app.services.query_service.query_image_frames")
+    @patch("app.services.query_service.generate_answer", new_callable=AsyncMock)
+    def test_unsupported_answer_is_rejected(
+        self,
+        mock_llm,
+        mock_img,
+        mock_text,
+        mock_clip,
+        mock_embed,
+        mock_verify,
+        client,
+        session_a,
+    ):
+        mock_text.return_value = {
+            "ids": [["chunk-1"]],
+            "documents": [["Aisha studied at LUMS. She is a computer science student."]],
+            "metadatas": [[{"document_id": "docA", "filename": "resume.pdf", "modality": "pdf", "page": 1, "session_id": session_a}]],
+            "distances": [[0.1]],
+        }
+        mock_img.return_value = {"ids": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_llm.return_value = "She studied at the University of Engineering and Technology (UET) in Pakistan."
+        mock_verify.return_value = False
+
+        resp = client.post(
+            "/query",
+            json={"query": "Where did she study?", "session_id": session_a},
+        )
+        assert resp.status_code == 200
+        assert "could not find" in resp.json()["answer"].lower()
+        assert mock_verify.await_count == 1
 
 
 class TestDeletion:

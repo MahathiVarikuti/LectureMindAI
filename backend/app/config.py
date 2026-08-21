@@ -1,12 +1,26 @@
 """Application configuration via pydantic-settings."""
 
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _resolve_env_file() -> str:
+    """Find the project root .env whether the app is started from the repo root or backend dir."""
+    candidates = [
+        Path.cwd() / ".env",
+        Path.cwd().parent / ".env",
+        Path(__file__).resolve().parents[2] / ".env",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(Path.cwd() / ".env")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_resolve_env_file(),
         env_file_encoding="utf-8",
         extra="ignore",
     )

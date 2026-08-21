@@ -64,6 +64,7 @@ def _store_text_chunks(
             "modality": modality,
             "chunk_id": i,
             "uploaded_at": uploaded_at,
+            "section": chunk.get("section", "other"),
         }
         if chunk.get("page") is not None:
             meta["page"] = int(chunk["page"])
@@ -87,8 +88,10 @@ def ingest_pdf(session_id: str, file_path: str, filename: str) -> dict:
     pages = extract_pdf_pages(str(dest))
     chunks: list[dict] = []
     for page in pages:
-        for text in chunk_text(page["text"]):
-            chunks.append({"text": text, "page": page["page"]})
+        page_chunks = chunk_text(page["text"])
+        for chunk_dict in page_chunks:
+            chunk_dict["page"] = page["page"]
+            chunks.append(chunk_dict)
 
     count = _store_text_chunks(session_id, document_id, filename, "pdf", chunks)
     db.add_document(document_id, session_id, filename, "pdf", str(dest), file_size, count)

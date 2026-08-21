@@ -5,6 +5,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from uuid import UUID
+
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -31,9 +33,12 @@ def _key_func(request: Request) -> str:
     sid = request.query_params.get("session_id")
     if sid:
         return sid
+    form_data = getattr(request.state, "_form_data", None)
+    if isinstance(form_data, dict) and form_data.get("session_id"):
+        return str(form_data["session_id"])
     body = getattr(request.state, "_body_json", None)
     if body and isinstance(body, dict) and body.get("session_id"):
-        return body["session_id"]
+        return str(body["session_id"])
     return get_remote_address(request)
 
 
@@ -41,8 +46,12 @@ limiter = Limiter(key_func=_key_func)
 
 
 def _validate_session_id(session_id: str) -> None:
-    if not session_id or len(session_id) < 8:
-        raise HTTPException(status_code=400, detail="Invalid session_id")
+    try:
+        value = UUID(str(session_id))
+    except (TypeError, ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid session_id") from None
+    if value.version != 4:
+        raise HTTPException(status_code=400, detail="session_id must be a UUID v4")
 
 
 @router.get("/health")

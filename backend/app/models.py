@@ -1,17 +1,39 @@
 """Pydantic request/response models."""
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, Field, field_validator
+
+
+def _validate_session_uuid(value: str) -> str:
+    try:
+        parsed = uuid.UUID(value)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError("session_id must be a valid UUID v4") from exc
+    if parsed.version != 4:
+        raise ValueError("session_id must be a valid UUID v4")
+    return str(parsed)
 
 
 class UploadUrlRequest(BaseModel):
     url: str
     session_id: str
 
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str) -> str:
+        return _validate_session_uuid(value)
+
 
 class QueryRequest(BaseModel):
     query: str
     session_id: str
     selected_documents: list[str] | None = None
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str) -> str:
+        return _validate_session_uuid(value)
 
 
 class SourceCitation(BaseModel):

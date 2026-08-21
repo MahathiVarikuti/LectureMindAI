@@ -50,4 +50,14 @@ async def capture_body_for_rate_limit(request: Request, call_next):
                 request.state._body_json = json.loads(body_bytes)
             except Exception:
                 request.state._body_json = None
+        elif "multipart/form-data" in content_type:
+            body_bytes = await request.body()
+            text = body_bytes.decode("utf-8", errors="ignore")
+            import re
+
+            match = re.search(r'name="session_id"\s*\r\n\r\n([^\r\n]+)', text)
+            if match:
+                request.state._form_data = {"session_id": match.group(1).strip()}
+            else:
+                request.state._form_data = {}
     return await call_next(request)
