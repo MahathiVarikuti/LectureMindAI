@@ -42,6 +42,9 @@ async def generate_answer(query: str, context: str) -> str:
         "You are a helpful assistant answering questions about lecture materials. "
         "Use ONLY the provided context. If the context does not contain enough "
         "information to answer, say you cannot find the answer in the uploaded material. "
+        "Carefully combine facts from all relevant context passages, and do simple "
+        "arithmetic when the question asks for a total or marks division. Do not say "
+        "information is missing when it is explicitly present in the context. "
         "Cite sources by filename and page/timestamp when relevant."
     )
     prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
