@@ -7,3 +7,7 @@ node_modules/
 *.tsbuildinfo
 .eslintcache
 .vscode/
+.venv/
+backend/eval/data/
+backend/eval/results/*.jsonl
+backend/models/

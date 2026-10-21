@@ -1,82 +1,50 @@
-from itertools import zip_longest
+from typing import List, Optional
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+import requests
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
-from app.db.chroma import collection
-from app.services.embedding_service import model
-from app.services.llm_service import (generate_answer,rewrite_query)
-from app.services.chat_memory import chat_sessions
-from typing import List
-
+from app.dependencies import retriever
+from app.services.chat_memory import append_turn, clear_session, get_history
+from app.services.rag_pipeline import answer_question
 
 router = APIRouter()
+
 
 class QueryRequest(BaseModel):
     query: str
     session_id: str
-    selected_documents: List[str] = []
+    selected_documents: List[str] = Field(default_factory=list)
+    model: Optional[str] = None  # override the Ollama model, e.g. "qwen2.5:7b"
+
 
 @router.post("/query")
 def query_rag(request: QueryRequest):
-    
-    chat_history = chat_sessions.get(request.session_id, [])
-    rewritten_query = rewrite_query(chat_history, request.query)
-    query_embedding = model.encode(rewritten_query)
-    query_params = {
-        "query_embeddings": [query_embedding.tolist()],
-        "n_results": 5,
-        "include": ["documents", "metadatas"]
-    }
-    if request.selected_documents:
-        query_params["where"] = {"document_id": {"$in": request.selected_documents}}
-    results = collection.query(**query_params)
-    retrieved_chunks = results['documents'][0]
-    metadata = results['metadatas'][0] or []
-    used_documents = list(
-    {
-        meta["filename"]
-        for meta in metadata
-        if meta
-    }
-)
-    #retrieval gaurd
-    if not retrieved_chunks:
-        return {
-            "answer": "I could not find that information in the uploaded material.",
-            "context": [],
-            "sources": [],
-            "used_documents": used_documents
-        }
-    context_parts = []
-    for chunk, meta in zip_longest(retrieved_chunks, metadata, fillvalue=None):
-        if not chunk:
-            continue
-        if not meta:
-            source_info = "Unknown source"
-        else:
-            source_info = f"{meta['filename']} (Page {meta['page']})" if 'page' in meta else meta['filename']
-        context_parts.append(f"Source: {source_info}\nContent: {chunk}")
-    context = "\n".join(context_parts)
-    answer = generate_answer(context, rewritten_query)
-    if request.session_id not in chat_sessions:
-        chat_sessions[request.session_id] = []
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query is empty.")
+    try:
+        result = answer_question(
+            request.query,
+            retriever,
+            chat_history=get_history(request.session_id),
+            document_ids=request.selected_documents or None,
+            model=request.model,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"LLM backend unavailable: {exc}") from exc
 
-    chat_sessions[request.session_id].append(
-    {
-        "role": "user",
-        "content": request.query
-    }
-)
+    append_turn(request.session_id, request.query, result["answer"])
 
-    chat_sessions[request.session_id].append(
-    {
-        "role": "assistant",
-        "content": answer
+    sources = result["sources"]
+    return {
+        **result,
+        # kept for older clients
+        "context": [s["text"] for s in sources],
+        "used_documents": sorted({s["filename"] for s in sources if s["filename"]}),
     }
-)
-    MAX_MESSAGES = 10
 
-    if len(chat_sessions[request.session_id]) > MAX_MESSAGES:
-        chat_sessions[request.session_id] = chat_sessions[request.session_id][-MAX_MESSAGES:]
-    return {"answer": answer, "context": retrieved_chunks, "sources": metadata, "used_documents": used_documents}
+
+@router.delete("/session/{session_id}")
+def reset_session(session_id: str):
+    clear_session(session_id)
+    return {"message": "Session cleared", "session_id": session_id}

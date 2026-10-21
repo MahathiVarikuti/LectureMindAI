@@ -15,8 +15,8 @@ export default function MessageBubble({content,role}: MessageBubbleProps)
     <div
       className={
         role === "user"
-          ? "bg-blue-100 ml-auto"
-          : "bg-gray-100"
+          ? "message-content user-message"
+          : "message-content assistant-message"
       }
     >
 
