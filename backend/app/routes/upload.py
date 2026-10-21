@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app import config
 from app.db.chroma import collection
 from app.dependencies import retriever
 from app.services.embedding_service import embed_documents
@@ -24,11 +25,33 @@ async def upload_pdf(file: UploadFile = File(...)):
     if not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
-    content = await file.read()
-    file_hash = hashlib.sha256(content).hexdigest()
+    document_id = str(uuid4())
+    stored_filename = f"{document_id}_{os.path.basename(file.filename)}"
+    file_path = os.path.join(UPLOAD_DIR, stored_filename)
+
+    # Stream to disk in small blocks so a huge upload can't exhaust RAM.
+    digest, size = hashlib.sha256(), 0
+    max_bytes = config.MAX_PDF_SIZE_MB * 1024 * 1024
+    try:
+        with open(file_path, "wb") as f:
+            while block := await file.read(1024 * 1024):
+                size += len(block)
+                if size > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"PDF is larger than {config.MAX_PDF_SIZE_MB} MB.",
+                    )
+                digest.update(block)
+                f.write(block)
+    except BaseException:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    file_hash = digest.hexdigest()
 
     existing = collection.get(where={"file_hash": file_hash}, limit=1, include=["metadatas"])
     if existing["ids"]:
+        os.remove(file_path)
         meta = existing["metadatas"][0]
         return {
             "filename": meta["filename"],
@@ -37,12 +60,6 @@ async def upload_pdf(file: UploadFile = File(...)):
             "duplicate": True,
             "message": "This file was already uploaded.",
         }
-
-    document_id = str(uuid4())
-    stored_filename = f"{document_id}_{os.path.basename(file.filename)}"
-    file_path = os.path.join(UPLOAD_DIR, stored_filename)
-    with open(file_path, "wb") as f:
-        f.write(content)
 
     uploaded_at = datetime.now(timezone.utc).isoformat()
     all_chunks, all_metadata = [], []

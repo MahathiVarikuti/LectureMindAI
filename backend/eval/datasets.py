@@ -31,12 +31,12 @@ SOURCES = {
 }
 
 
-def load_parquet(name, split):
+def load_parquet(name, split, url=None):
     os.makedirs(DATA_DIR, exist_ok=True)
     path = os.path.join(DATA_DIR, f"{name}_{split}.parquet")
     if not os.path.exists(path):
         print(f"downloading {name}/{split} ...")
-        urllib.request.urlretrieve(SOURCES[name].format(split=split), path)
+        urllib.request.urlretrieve(url or SOURCES[name].format(split=split), path)
     return pd.read_parquet(path)
 
 
@@ -161,6 +161,33 @@ def load_ragtruth(split="test", task_types=("QA",), n=300, seed=0):
             "model": r["model"],
             "hallucinated": (labels["evident_conflict"] + labels["baseless_info"]) > 0,
         })
+    rng = random.Random(seed)
+    rng.shuffle(rows)
+    return rows[:n]
+
+
+# --- RAGBench ----------------------------------------------------------------
+# rungalileo/ragbench: 12 domain subsets with RAG responses labelled for
+# adherence (faithfulness) at response and sentence level. Domains relevant to
+# lecture material: techqa, emanual, pubmedqa, covidqa, hotpotqa.
+# NOTE: column names (`question`, `documents`, `response`, `adherence_score`)
+# follow the dataset card and have not been verified against a download yet.
+RAGBENCH_SUBSETS = ("techqa", "emanual", "pubmedqa", "covidqa", "hotpotqa", "delucionqa", "expertqa")
+
+
+def load_ragbench(split="test", subsets=("techqa", "emanual", "pubmedqa", "hotpotqa"), n=300, seed=0):
+    rows = []
+    for subset in subsets:
+        url = ("https://huggingface.co/api/datasets/rungalileo/ragbench/parquet/"
+               f"{subset}/{split}/0.parquet")
+        df = load_parquet(f"ragbench_{subset}", split, url=url)
+        for _, r in df.iterrows():
+            docs = [d for d in r["documents"] if d]
+            rows.append({
+                "id": f"{subset}_{r['id']}", "query": r["question"], "context": "\n\n".join(docs),
+                "documents": docs, "output": r["response"], "model": subset,
+                "hallucinated": not bool(r["adherence_score"]),
+            })
     rng = random.Random(seed)
     rng.shuffle(rows)
     return rows[:n]

@@ -52,5 +52,8 @@ USE_GROUNDING_CHECK = _env("USE_GROUNDING_CHECK", "1") == "1"
 
 NOT_FOUND_ANSWER = "I could not find that information in the uploaded material."
 
+# --- Resource limits --------------------------------------------------------
+MAX_PDF_SIZE_MB = _env("MAX_PDF_SIZE_MB", 25, int)
+
 # --- Chat memory ------------------------------------------------------------
 MAX_HISTORY_MESSAGES = 10
