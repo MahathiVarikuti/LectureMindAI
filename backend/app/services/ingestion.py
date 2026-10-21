@@ -1,194 +1,187 @@
-"""Document ingestion pipelines."""
+"""Ingestion pipelines: PDF, audio, video (transcript + frames). All limits are checked
+before the expensive work (transcription / embedding) starts.
 
+Callers pass a path to a file already stored on disk (or in a temp dir for URLs). On any
+failure the vectors written so far are purged so a half-ingested document never lingers.
+"""
 import shutil
-import uuid
-from datetime import datetime, timezone
+import tempfile
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
-from app import database as db
 from app.config import settings
-from app.services.clip_embeddings import embed_image
-from app.services.embeddings import embed_texts
-from app.services.transcription import transcribe_audio
-from app.services.vector_store import add_image_frames, add_text_chunks
-from app.utils.chunking import chunk_segments, chunk_text
-from app.utils.media import (
-    extract_audio_from_video,
-    get_media_duration,
-    sample_video_frames,
-)
-from app.utils.pdf_extractor import extract_pdf_pages
+from app.db import sqlite
+from app.db.chroma import image_collection, text_collection
+from app.dependencies import get_retriever
+from app.errors import AppError
+from app.services.embedding_service import embed_documents
+from app.services.pdf_service import extract_text_from_pdf
+from app.utils.chunker import chunk_segments, chunk_text
+from app.utils.media import extract_audio, get_media_duration, sample_frames
+
+ADD_BATCH = 500
+_slots = threading.BoundedSemaphore(settings.max_concurrent_ingestions)
 
 
-def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+@contextmanager
+def ingestion_slot():
+    """Models are memory-hungry; run only a few ingestions at once (serialised by default)."""
+    if not _slots.acquire(timeout=120):
+        raise AppError(503, "The server is busy processing other uploads. Please retry shortly.")
+    try:
+        yield
+    finally:
+        _slots.release()
 
 
-def _session_dir(session_id: str) -> Path:
-    d = settings.upload_path / session_id
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+def check_can_accept(session_id: str) -> None:
+    if sqlite.count_documents(session_id) >= settings.max_documents_per_session:
+        raise AppError(413, f"Document limit reached ({settings.max_documents_per_session} per session).")
 
 
-def validate_upload_limits(session_id: str, file_size: int, is_pdf: bool) -> None:
-    if db.count_documents(session_id) >= settings.max_documents_per_session:
-        raise ValueError("Maximum documents per session exceeded")
-    if db.total_storage(session_id) + file_size > settings.max_storage_per_session_bytes:
-        raise ValueError("Maximum storage per session exceeded")
-    if is_pdf and file_size > settings.max_pdf_size_bytes:
-        raise ValueError("PDF file too large")
+def check_storage(session_id: str, incoming_bytes: int) -> None:
+    if sqlite.total_storage(session_id) + incoming_bytes > settings.max_storage_per_session_bytes:
+        raise AppError(413, f"Storage limit reached ({settings.max_storage_per_session_mb} MB per session).")
 
 
-def _store_text_chunks(
-    session_id: str,
-    document_id: str,
-    filename: str,
-    modality: str,
-    chunks: list[dict],
-) -> int:
+def check_duration(path: str) -> float:
+    duration = get_media_duration(path)
+    if duration > settings.max_media_duration_seconds:
+        raise AppError(
+            413, f"Media is {duration / 60:.0f} min long; the limit is {settings.max_media_duration_minutes} min."
+        )
+    return duration
+
+
+def purge_vectors(document_id: str) -> None:
+    for collection in (text_collection(), image_collection()):
+        collection.delete(where={"document_id": document_id})
+    get_retriever().invalidate()
+
+
+def _store_text(session_id, document_id, filename, modality, chunks) -> int:
+    """chunks: [{text, page?, timestamp_start?, timestamp_end?}] -> text_chunks collection."""
     if not chunks:
         return 0
+    uploaded_at = sqlite.now_iso()
     texts = [c["text"] for c in chunks]
-    embeddings = embed_texts(texts)
-    ids = []
-    documents = []
-    metadatas = []
-    uploaded_at = _iso_now()
-    for i, chunk in enumerate(chunks):
-        ids.append(f"{document_id}_text_{i}")
-        documents.append(chunk["text"])
-        meta: dict = {
-            "session_id": session_id,
-            "document_id": document_id,
-            "filename": filename,
-            "modality": modality,
-            "chunk_id": i,
-            "uploaded_at": uploaded_at,
-            "section": chunk.get("section", "other"),
-        }
-        if chunk.get("page") is not None:
-            meta["page"] = int(chunk["page"])
-        if chunk.get("timestamp_start") is not None:
-            meta["timestamp_start"] = float(chunk["timestamp_start"])
-        if chunk.get("timestamp_end") is not None:
-            meta["timestamp_end"] = float(chunk["timestamp_end"])
-        metadatas.append(meta)
-    add_text_chunks(ids, embeddings, documents, metadatas)
+    embeddings = embed_documents(texts)
+    collection = text_collection()
+    for start in range(0, len(chunks), ADD_BATCH):
+        ids, metas = [], []
+        for i in range(start, min(start + ADD_BATCH, len(chunks))):
+            c = chunks[i]
+            meta = {
+                "session_id": session_id, "document_id": document_id, "filename": filename,
+                "modality": modality, "chunk_id": i, "uploaded_at": uploaded_at,
+            }
+            # Optional fields are omitted (not None): Chroma rejects None metadata values.
+            for key in ("page", "timestamp_start", "timestamp_end"):
+                if c.get(key) is not None:
+                    meta[key] = c[key]
+            ids.append(f"{document_id}_{i}")
+            metas.append(meta)
+        collection.add(
+            ids=ids, documents=texts[start:start + ADD_BATCH],
+            embeddings=embeddings[start:start + ADD_BATCH].tolist(), metadatas=metas,
+        )
     return len(chunks)
 
 
-def ingest_pdf(session_id: str, file_path: str, filename: str) -> dict:
-    document_id = str(uuid.uuid4())
-    file_size = Path(file_path).stat().st_size
-    validate_upload_limits(session_id, file_size, is_pdf=True)
+def _store_frames(session_id, document_id, filename, frames) -> int:
+    if not frames:
+        return 0
+    from app.services.clip_service import embed_images
 
-    dest = _session_dir(session_id) / f"{document_id}_{filename}"
-    shutil.copy2(file_path, dest)
-
-    pages = extract_pdf_pages(str(dest))
-    chunks: list[dict] = []
-    for page in pages:
-        page_chunks = chunk_text(page["text"])
-        for chunk_dict in page_chunks:
-            chunk_dict["page"] = page["page"]
-            chunks.append(chunk_dict)
-
-    count = _store_text_chunks(session_id, document_id, filename, "pdf", chunks)
-    db.add_document(document_id, session_id, filename, "pdf", str(dest), file_size, count)
-    return {
-        "document_id": document_id,
-        "filename": filename,
-        "chunks": count,
-        "modality": "pdf",
-        "message": f"PDF ingested with {count} chunks",
-    }
+    uploaded_at = sqlite.now_iso()
+    collection = image_collection()
+    for start in range(0, len(frames), ADD_BATCH):
+        batch = frames[start:start + ADD_BATCH]
+        collection.add(
+            ids=[f"{document_id}_frame_{start + i}" for i in range(len(batch))],
+            embeddings=embed_images([f["path"] for f in batch]),
+            metadatas=[{
+                "session_id": session_id, "document_id": document_id, "filename": filename,
+                "modality": "video_frame", "timestamp": float(f["timestamp"]),
+                "uploaded_at": uploaded_at,
+            } for f in batch],
+        )
+    return len(frames)
 
 
-def ingest_audio(session_id: str, file_path: str, filename: str, modality: str = "audio") -> dict:
-    document_id = str(uuid.uuid4())
-    file_size = Path(file_path).stat().st_size
-    validate_upload_limits(session_id, file_size, is_pdf=False)
-
-    duration = get_media_duration(file_path)
-    if duration > settings.max_media_duration_seconds:
-        raise ValueError("Media duration exceeds limit")
-
-    dest = _session_dir(session_id) / f"{document_id}_{filename}"
-    shutil.copy2(file_path, dest)
-
-    segments = transcribe_audio(str(dest))
-    chunks = chunk_segments(segments)
-    count = _store_text_chunks(session_id, document_id, filename, modality, chunks)
-    db.add_document(document_id, session_id, filename, modality, str(dest), file_size, count)
-    return {
-        "document_id": document_id,
-        "filename": filename,
-        "chunks": count,
-        "modality": modality,
-        "message": f"Audio ingested with {count} chunks",
-    }
+def _result(document_id, filename, chunks, modality, message):
+    return {"document_id": document_id, "filename": filename, "chunks": chunks,
+            "modality": modality, "message": message}
 
 
-def ingest_video(session_id: str, file_path: str, filename: str) -> dict:
-    document_id = str(uuid.uuid4())
-    file_size = Path(file_path).stat().st_size
-    validate_upload_limits(session_id, file_size, is_pdf=False)
-
-    duration = get_media_duration(file_path)
-    if duration > settings.max_media_duration_seconds:
-        raise ValueError("Media duration exceeds limit")
-
-    dest = _session_dir(session_id) / f"{document_id}_{filename}"
-    shutil.copy2(file_path, dest)
-
-    work_dir = _session_dir(session_id) / f"{document_id}_work"
-    work_dir.mkdir(exist_ok=True)
-    audio_path = str(work_dir / "audio.wav")
-    extract_audio_from_video(str(dest), audio_path)
-
-    segments = transcribe_audio(audio_path)
-    chunks = chunk_segments(segments)
-    transcript_modality = "video_transcript"
-    text_count = _store_text_chunks(
-        session_id, document_id, filename, transcript_modality, chunks
-    )
-
-    frames_dir = str(work_dir / "frames")
-    frames = sample_video_frames(str(dest), frames_dir, settings.frame_sample_interval)
-    uploaded_at = _iso_now()
-    if frames:
-        frame_ids = []
-        frame_embeddings = []
-        frame_metas = []
-        for i, frame in enumerate(frames):
-            frame_ids.append(f"{document_id}_frame_{i}")
-            frame_embeddings.append(embed_image(frame["path"]))
-            frame_metas.append(
-                {
-                    "session_id": session_id,
-                    "document_id": document_id,
-                    "filename": filename,
-                    "modality": "video_frame",
-                    "timestamp": frame["timestamp"],
-                    "uploaded_at": uploaded_at,
-                }
-            )
-        add_image_frames(frame_ids, frame_embeddings, frame_metas)
-
-    total_chunks = text_count + len(frames)
-    db.add_document(
-        document_id, session_id, filename, "video", str(dest), file_size, total_chunks
-    )
-
+def ingest_pdf(session_id, document_id, path, filename, file_hash=None, stored_path=None):
+    size = Path(path).stat().st_size
     try:
-        shutil.rmtree(work_dir)
-    except Exception:
-        pass
+        with ingestion_slot():
+            chunks = []
+            for page in extract_text_from_pdf(pdf_path=str(path)):
+                for text in chunk_text(page["text"]):
+                    chunks.append({"text": text, "page": page["page"]})
+            if not chunks:
+                raise AppError(422, "No extractable text found. The PDF may be scanned images (needs OCR).")
+            count = _store_text(session_id, document_id, filename, "pdf", chunks)
+        sqlite.add_document(document_id, session_id, filename, "pdf", stored_path, size, count, file_hash)
+    except BaseException:
+        purge_vectors(document_id)
+        raise
+    get_retriever().invalidate()
+    return _result(document_id, filename, count, "pdf", f"PDF ingested ({count} chunks).")
 
-    return {
-        "document_id": document_id,
-        "filename": filename,
-        "chunks": total_chunks,
-        "modality": "video",
-        "message": f"Video ingested: {text_count} transcript chunks, {len(frames)} frames",
-    }
+
+def _transcribe_to_chunks(path):
+    from app.services.transcription import transcribe_audio
+
+    return chunk_segments(transcribe_audio(path))
+
+
+def ingest_audio(session_id, document_id, path, filename, file_hash=None, stored_path=None):
+    size = Path(path).stat().st_size
+    check_duration(path)  # fail fast, before the expensive transcription
+    try:
+        with ingestion_slot():
+            chunks = _transcribe_to_chunks(path)
+            if not chunks:
+                raise AppError(422, "No speech could be transcribed from this audio.")
+            count = _store_text(session_id, document_id, filename, "audio", chunks)
+        sqlite.add_document(document_id, session_id, filename, "audio", stored_path, size, count, file_hash)
+    except BaseException:
+        purge_vectors(document_id)
+        raise
+    get_retriever().invalidate()
+    return _result(document_id, filename, count, "audio", f"Audio ingested ({count} transcript chunks).")
+
+
+def ingest_video(session_id, document_id, path, filename, file_hash=None, stored_path=None,
+                 with_frames=True):
+    """Video = audio track -> transcript pipeline, plus sampled frames -> CLIP -> image_frames."""
+    size = Path(path).stat().st_size
+    duration = check_duration(path)
+    work = Path(tempfile.mkdtemp(prefix="lecturemind_"))
+    try:
+        with ingestion_slot():
+            audio_path = extract_audio(path, str(work / "audio.wav"))
+            chunks = _transcribe_to_chunks(audio_path)
+            text_count = _store_text(session_id, document_id, filename, "video_transcript", chunks)
+            frame_count = 0
+            if with_frames:
+                max_frames = int(duration // settings.frame_sample_interval) + 2
+                frames = sample_frames(path, str(work / "frames"), settings.frame_sample_interval, max_frames)
+                frame_count = _store_frames(session_id, document_id, filename, frames)
+            if text_count + frame_count == 0:
+                raise AppError(422, "No speech or frames could be extracted from this video.")
+        sqlite.add_document(document_id, session_id, filename, "video", stored_path, size,
+                            text_count + frame_count, file_hash)
+    except BaseException:
+        purge_vectors(document_id)
+        raise
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    get_retriever().invalidate()
+    return _result(document_id, filename, text_count + frame_count, "video",
+                   f"Video ingested ({text_count} transcript chunks, {frame_count} frames).")

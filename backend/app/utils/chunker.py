@@ -80,3 +80,38 @@ def chunk_text_fixed(text, chunk_size=1000, overlap=200):
         chunks.append(text[start:end])
         start += chunk_size - overlap
     return chunks
+
+
+def chunk_segments(segments, chunk_size=None, overlap=None):
+    """Chunk timestamped transcript segments [{text, start, end}] without splitting a segment.
+
+    Segments are packed up to chunk_size characters; the next chunk restarts with the last
+    segments of the previous one (up to `overlap` characters) so context carries across
+    chunk boundaries. Each chunk keeps the start of its first and end of its last segment.
+    """
+    chunk_size = chunk_size or config.CHUNK_SIZE
+    overlap = config.CHUNK_OVERLAP if overlap is None else overlap
+    chunks, current, size = [], [], 0
+
+    def flush():
+        if current:
+            chunks.append({
+                "text": " ".join(s["text"] for s in current).strip(),
+                "timestamp_start": current[0]["start"],
+                "timestamp_end": current[-1]["end"],
+            })
+
+    for seg in segments:
+        if current and size + len(seg["text"]) > chunk_size:
+            flush()
+            tail, tail_len = [], 0
+            for prev in reversed(current):
+                if tail_len + len(prev["text"]) > overlap:
+                    break
+                tail.insert(0, prev)
+                tail_len += len(prev["text"]) + 1
+            current, size = tail, tail_len
+        current.append(seg)
+        size += len(seg["text"]) + 1
+    flush()
+    return [c for c in chunks if len(c["text"]) >= 1]

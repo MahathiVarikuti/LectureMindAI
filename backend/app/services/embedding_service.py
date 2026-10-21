@@ -1,13 +1,19 @@
 from functools import lru_cache
 
-from sentence_transformers import SentenceTransformer
-
 from app import config
 
 
 @lru_cache(maxsize=None)
 def get_model(name=None):
-    return SentenceTransformer(name or config.EMBEDDING_MODEL)
+    # Imported lazily so the API (and its tests) start without loading torch.
+    from sentence_transformers import SentenceTransformer
+
+    from app.errors import AppError
+
+    try:
+        return SentenceTransformer(name or config.EMBEDDING_MODEL)
+    except Exception as exc:  # e.g. no network on first run, so the model cannot be downloaded
+        raise AppError(503, f"The embedding model could not be loaded: {exc}") from exc
 
 
 def _query_prefix(name):

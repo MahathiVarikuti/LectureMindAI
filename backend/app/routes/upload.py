@@ -1,105 +1,78 @@
 import hashlib
 import os
-from datetime import datetime, timezone
-from uuid import uuid4
+import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
-from app import config
-from app.db.chroma import collection
-from app.dependencies import retriever
-from app.services.embedding_service import embed_documents
-from app.services.pdf_service import extract_text_from_pdf
-from app.utils.chunker import chunk_text
+from app.config import settings
+from app.db import sqlite
+from app.dependencies import validate_session_id
+from app.errors import AppError
+from app.limiter import limiter, upload_limit
+from app.models import UploadUrlRequest
+from app.services import ingestion
+from app.services.url_ingestion import ingest_url
+from app.utils.media import detect_modality, looks_like_pdf, safe_filename
 
 router = APIRouter()
+BLOCK = 1024 * 1024
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
-ADD_BATCH_SIZE = 1000
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+async def _save_stream(file: UploadFile, dest: str, max_bytes: int, session_id: str):
+    """Stream to disk in 1 MB blocks (never the whole file in RAM), enforcing the size and
+    storage limits as bytes arrive so an oversized upload is rejected early."""
+    digest, size = hashlib.sha256(), 0
+    used = sqlite.total_storage(session_id)
+    with open(dest, "wb") as out:
+        while block := await file.read(BLOCK):
+            size += len(block)
+            if size > max_bytes:
+                raise AppError(413, f"File is larger than the {max_bytes // (1024 * 1024)} MB limit.")
+            if used + size > settings.max_storage_per_session_bytes:
+                raise AppError(413, f"Storage limit reached ({settings.max_storage_per_session_mb} MB per session).")
+            digest.update(block)
+            out.write(block)
+    return digest.hexdigest(), size
 
 
 @router.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
-    if not (file.filename or "").lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+@limiter.limit(upload_limit)
+async def upload(request: Request, file: UploadFile = File(...), session_id: str = Form(...)):
+    session_id = validate_session_id(session_id)
+    filename = safe_filename(file.filename or "")
+    modality = detect_modality(filename)  # by extension: client MIME type is not trusted
+    if modality is None:
+        raise AppError(400, "Unsupported file type. Upload a PDF, audio (mp3/wav/m4a/...) or video (mp4/webm/mkv/...).")
+    ingestion.check_can_accept(session_id)
 
-    document_id = str(uuid4())
-    stored_filename = f"{document_id}_{os.path.basename(file.filename)}"
-    file_path = os.path.join(UPLOAD_DIR, stored_filename)
+    document_id = uuid.uuid4().hex
+    session_dir = settings.upload_dir / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    dest = str(session_dir / f"{document_id}_{filename}")
+    max_bytes = settings.max_pdf_size_bytes if modality == "pdf" else settings.max_media_size_bytes
 
-    # Stream to disk in small blocks so a huge upload can't exhaust RAM.
-    digest, size = hashlib.sha256(), 0
-    max_bytes = config.MAX_PDF_SIZE_MB * 1024 * 1024
     try:
-        with open(file_path, "wb") as f:
-            while block := await file.read(1024 * 1024):
-                size += len(block)
-                if size > max_bytes:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"PDF is larger than {config.MAX_PDF_SIZE_MB} MB.",
-                    )
-                digest.update(block)
-                f.write(block)
+        file_hash, _size = await _save_stream(file, dest, max_bytes, session_id)
+        if modality == "pdf" and not looks_like_pdf(dest):
+            raise AppError(400, "The file is not a valid PDF.")
+        existing = sqlite.find_by_hash(session_id, file_hash)
+        if existing:
+            os.remove(dest)
+            return {"document_id": existing["document_id"], "filename": existing["filename"],
+                    "chunks": existing["chunk_count"], "modality": existing["modality"],
+                    "duplicate": True, "message": "This file was already uploaded."}
+        ingest = {"pdf": ingestion.ingest_pdf, "audio": ingestion.ingest_audio,
+                  "video": ingestion.ingest_video}[modality]
+        return await run_in_threadpool(ingest, session_id, document_id, dest, filename, file_hash, dest)
     except BaseException:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        if os.path.exists(dest):
+            os.remove(dest)
         raise
-    file_hash = digest.hexdigest()
 
-    existing = collection.get(where={"file_hash": file_hash}, limit=1, include=["metadatas"])
-    if existing["ids"]:
-        os.remove(file_path)
-        meta = existing["metadatas"][0]
-        return {
-            "filename": meta["filename"],
-            "document_id": meta["document_id"],
-            "chunks": 0,
-            "duplicate": True,
-            "message": "This file was already uploaded.",
-        }
 
-    uploaded_at = datetime.now(timezone.utc).isoformat()
-    all_chunks, all_metadata = [], []
-    for page in extract_text_from_pdf(pdf_path=file_path, document_id=document_id, filename=stored_filename):
-        for chunk in chunk_text(page["text"]):
-            all_metadata.append({
-                "filename": file.filename,
-                "stored_filename": stored_filename,
-                "file_hash": file_hash,
-                "page": page["page"],
-                "chunk_index": len(all_chunks),
-                "source_type": "pdf",
-                "document_id": document_id,
-                "uploaded_at": uploaded_at,
-            })
-            all_chunks.append(chunk)
-
-    if not all_chunks:
-        os.remove(file_path)
-        raise HTTPException(
-            status_code=422,
-            detail="No extractable text found. The PDF may be scanned images (needs OCR).",
-        )
-
-    embeddings = embed_documents(all_chunks)
-    ids = [f"{document_id}_{i}" for i in range(len(all_chunks))]
-    for start in range(0, len(ids), ADD_BATCH_SIZE):
-        end = start + ADD_BATCH_SIZE
-        collection.add(
-            ids=ids[start:end],
-            documents=all_chunks[start:end],
-            embeddings=embeddings[start:end].tolist(),
-            metadatas=all_metadata[start:end],
-        )
-    retriever.invalidate()
-
-    return {
-        "filename": file.filename,
-        "chunks": len(all_chunks),
-        "message": "File uploaded successfully!",
-        "document_id": document_id,
-        "duplicate": False,
-    }
+@router.post("/upload-url")
+@limiter.limit(upload_limit)
+async def upload_url(request: Request, body: UploadUrlRequest):
+    session_id = validate_session_id(body.session_id)
+    return await run_in_threadpool(ingest_url, session_id, body.url.strip(), body.include_frames)

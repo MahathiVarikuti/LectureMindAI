@@ -1,50 +1,64 @@
-from typing import List, Optional
-
 import requests
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request
+from fastapi.concurrency import run_in_threadpool
 
-from app.dependencies import retriever
-from app.services.chat_memory import append_turn, clear_session, get_history
+from app.db import sqlite
+from app.dependencies import get_retriever, validate_session_id
+from app.errors import AppError
+from app.limiter import limiter, query_limit
+from app.models import QueryRequest
+from app.services.chat_memory import append_turn, clear_session, get_full_history, get_history
 from app.services.rag_pipeline import answer_question
 
 router = APIRouter()
 
 
-class QueryRequest(BaseModel):
-    query: str
-    session_id: str
-    selected_documents: List[str] = Field(default_factory=list)
-    model: Optional[str] = None  # override the Ollama model, e.g. "qwen2.5:7b"
+def _run_query(body: QueryRequest, session_id: str, document_ids):
+    return answer_question(
+        body.query,
+        get_retriever(),
+        chat_history=get_history(session_id),
+        document_ids=document_ids,
+        model=body.model,
+        session_id=session_id,
+    )
 
 
 @router.post("/query")
-def query_rag(request: QueryRequest):
-    if not request.query.strip():
-        raise HTTPException(status_code=400, detail="Query is empty.")
+@limiter.limit(query_limit)
+async def query_rag(request: Request, body: QueryRequest):
+    session_id = validate_session_id(body.session_id)
+    if not body.query.strip():
+        raise AppError(400, "Query is empty.")
+
+    document_ids = None
+    if body.selected_documents:
+        owned = {d["document_id"] for d in sqlite.list_documents(session_id)}
+        document_ids = [d for d in body.selected_documents if d in owned]
+        if not document_ids:
+            raise AppError(404, "Document not found.")
+
     try:
-        result = answer_question(
-            request.query,
-            retriever,
-            chat_history=get_history(request.session_id),
-            document_ids=request.selected_documents or None,
-            model=request.model,
-        )
+        result = await run_in_threadpool(_run_query, body, session_id, document_ids)
+    except requests.Timeout as exc:
+        raise AppError(504, "The language model timed out. Try again or use a smaller model.") from exc
     except requests.RequestException as exc:
-        raise HTTPException(status_code=503, detail=f"LLM backend unavailable: {exc}") from exc
+        raise AppError(503, "The language model (Ollama) is unavailable. Is it running?") from exc
 
-    append_turn(request.session_id, request.query, result["answer"])
-
+    append_turn(session_id, body.query, result["answer"])
     sources = result["sources"]
     return {
         **result,
-        # kept for older clients
-        "context": [s["text"] for s in sources],
         "used_documents": sorted({s["filename"] for s in sources if s["filename"]}),
     }
 
 
-@router.delete("/session/{session_id}")
-def reset_session(session_id: str):
-    clear_session(session_id)
-    return {"message": "Session cleared", "session_id": session_id}
+@router.get("/history")
+def history(session_id: str):
+    return {"messages": get_full_history(validate_session_id(session_id))}
+
+
+@router.delete("/history")
+def reset_history(session_id: str):
+    clear_session(validate_session_id(session_id))
+    return {"message": "Conversation cleared"}

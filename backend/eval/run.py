@@ -186,7 +186,7 @@ def cmd_generation(args):
         rng.shuffle(qs)
         sample += [{**q, "group": g} for q in qs[:n_each[g]]]
     retriever = make_retriever(docs, RETRIEVAL_CONFIGS["hybrid_rerank"], args.dataset)
-    threshold = args.threshold if args.threshold is not None else config.RELEVANCE_THRESHOLD
+    threshold = args.threshold if args.threshold is not None else retriever.relevance_threshold
     print(f"{args.dataset}: {len(sample)} questions "
           f"({', '.join(f'{g}={sum(s['group'] == g for s in sample)}' for g in groups)}), threshold={threshold}")
 
