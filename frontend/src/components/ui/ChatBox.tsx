@@ -56,12 +56,35 @@ export default function ChatBox() {
     [documents, selected],
   );
 
-  useEffect(() => {
+  const [uploading, setUploading] = useState(false);
+
+  const loadDocuments = () =>
     api
       .get("/documents")
       .then((res) => setDocuments(res.data as DocumentInfo[]))
       .catch((error) => console.error("Error loading documents:", error));
+
+  useEffect(() => {
+    loadDocuments();
   }, []);
+
+  const uploadPdf = async (file: File | undefined) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      setUploading(true);
+      const response = await api.post("/upload", formData);
+      if (response.data.duplicate) alert("This file was already uploaded.");
+      await loadDocuments();
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      alert(detail || "Failed to upload file.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const toggleDocument = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
@@ -100,6 +123,19 @@ export default function ChatBox() {
         <div className="sidebar-section">
           <div className="sidebar-label">Knowledge base <span>{documents.length}</span></div>
           <p className="sidebar-hint">Choose documents to narrow retrieval. No selection searches everything.</p>
+          <label className="new-chat-button" style={{ cursor: uploading ? "wait" : "pointer", textAlign: "center" }}>
+            {uploading ? "Uploading…" : "＋ Upload PDF"}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              hidden
+              disabled={uploading}
+              onChange={(e) => {
+                uploadPdf(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
           <div className="document-list">
             {documents.length === 0 ? <div className="empty-docs">Upload notes to begin.</div> : documents.map((doc) => (
               <label key={doc.document_id} className={`document-row ${selected.includes(doc.document_id) ? "selected" : ""}`}>
