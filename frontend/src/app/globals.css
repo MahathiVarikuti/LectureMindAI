@@ -229,3 +229,21 @@ body {
   .prompt-grid { grid-template-columns: 1fr; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
 }
+/* upload panel, message list, document delete */
+.upload-panel { display: grid; gap: 8px; padding: 0 0 14px; }
+.upload-button { display: block; text-align: center; cursor: pointer; }
+.upload-button.busy { cursor: wait; opacity: .7; }
+.url-form { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.url-form input[type="url"] { min-width: 0; border: 1px solid #e1e5ea; border-radius: 8px; padding: 7px 9px; font-size: 11px; }
+.url-form button { border: 1px solid #e1e5ea; border-radius: 8px; background: #fff; padding: 0 10px; font-size: 11px; }
+.url-form button:disabled { opacity: .5; }
+.url-frames { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; color: #8b95a1; font-size: 10px; }
+.upload-disclaimer { color: #a0a8b3; font-size: 10px; line-height: 1.4; }
+.upload-status { color: #5f7f6b; font-size: 11px; line-height: 1.4; }
+.upload-status.error { color: #b5483d; }
+.document-pick { display: flex; flex: 1; align-items: center; gap: 9px; min-width: 0; cursor: pointer; }
+.doc-delete { border: 0; background: none; color: #b0b7c0; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.doc-delete:hover { color: #b5483d; }
+.user-row { display: flex; justify-content: flex-end; margin: 14px 0; }
+.user-bubble { max-width: 75%; border-radius: 13px; background: #17202d; color: #fff; padding: 10px 14px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.conversation .answer-card { margin: 14px 0; }
