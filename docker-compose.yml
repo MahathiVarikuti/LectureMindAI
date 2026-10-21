@@ -1,21 +1,31 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    # First run:  docker compose exec ollama ollama pull qwen2.5:1.5b
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     volumes:
-      - backend_data:/app/data
+      - backend_data:/app/data      # uploads, Chroma vectors, SQLite chat history, model cache
     environment:
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - CORS_ORIGINS=http://localhost:3000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      OLLAMA_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:1.5b}
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      USE_RERANKER: ${USE_RERANKER:-0}
+      USE_GROUNDING_CHECK: ${USE_GROUNDING_CHECK:-0}
+    depends_on:
+      - ollama
 
   frontend:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
@@ -23,3 +33,4 @@ services:
 
 volumes:
   backend_data:
+  ollama_data:

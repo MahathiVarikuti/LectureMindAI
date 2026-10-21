@@ -79,10 +79,17 @@ python -m eval.run hallucination --source ragbench --nli-model cross-encoder/nli
 python -m eval.run conversation
 ```
 
-## 4. Running safely on a laptop
+## 4. Defaults vs. the evaluation settings
+The evaluation harness measured the reranked, hybrid, BGE configuration. The application defaults follow the project spec instead
+(`all-MiniLM-L6-v2`, dense retrieval only) because it is the lightest on RAM. To reproduce the measured quality in the app, set
+`EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 USE_HYBRID=1 USE_RERANKER=1` (and optionally `USE_GROUNDING_CHECK=1`); the relevance threshold then
+defaults to 0.125 (reranker scale). With the default MiniLM dense mode the threshold is 0.25 cosine: calibrate it with `python -m eval.run threshold`.
+Re-upload documents after changing the embedding model.
+
+## 5. Running safely on a laptop
 
 The Windows freezes were memory exhaustion: up to three models (embedder, reranker, NLI) plus Ollama plus torch.
-- Uploads are now streamed to disk and capped by `MAX_PDF_SIZE_MB` (default 25).
+- Uploads are streamed to disk in 1 MB blocks and capped (`MAX_PDF_SIZE_MB`, `MAX_MEDIA_SIZE_MB`); only one ingestion runs at a time.
 - Run one process stack at a time (not Docker and local uvicorn together).
 - For a first run set `USE_RERANKER=0 USE_GROUNDING_CHECK=0`, then enable each and watch RAM.
 - Eval runs: start with `-n 50`; close other apps; run one model per command.
