@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Required by the production Docker image (frontend/Dockerfile copies .next/standalone).
+  output: "standalone",
 };
 
 export default nextConfig;

@@ -1,14 +1,24 @@
 # CPU-only torch keeps the install small; drop the index line if you have a CUDA GPU.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
+torchvision
+
+# API
 fastapi
 uvicorn[standard]
 python-multipart
-pymupdf
-chromadb
+pydantic-settings
+slowapi
+
+# RAG
 sentence-transformers
+transformers
+chromadb
 rank-bm25
+pillow
+
+# Ingestion
+pymupdf
+faster-whisper
+yt-dlp
 requests
-# evaluation only
-pandas
-pyarrow

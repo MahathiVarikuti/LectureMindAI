@@ -1,73 +1,17 @@
-# Setup Guide
+# Setup
 
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- [Ollama](https://ollama.ai/) installed and running
-- [ffmpeg](https://ffmpeg.org/) on PATH (`ffmpeg` and `ffprobe`)
-- CPU-only machine supported (no GPU required)
-
-## Ollama Model
-
-```bash
-ollama pull qwen2.5:1.5b
-```
-
-Verify: `curl http://localhost:11434/api/tags`
-
-## Backend
-
-```bash
-cd backend
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-# Copy env config
-cp ../.env.example ../.env   # edit as needed
-
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-First run downloads embedding/Whisper/CLIP models (may take several minutes on CPU).
-
-## Frontend
-
-```bash
-cd frontend
-npm install
-cp ../.env.example .env.local   # set NEXT_PUBLIC_API_URL
-npm run dev
-```
-
-Open http://localhost:3000
-
-## Tests
-
-```bash
-cd backend
-pytest -v
-```
-
-## Docker
-
-```bash
-docker-compose up --build
-```
-
-Note: Ollama must be reachable from the backend container. By default `OLLAMA_URL=http://host.docker.internal:11434` on Docker Desktop.
+1. **Install**: Python 3.11+, Node 20+, ffmpeg (provides `ffmpeg` and `ffprobe`), Ollama.
+2. **Pull the LLM**: `ollama pull qwen2.5:1.5b`.
+3. **Backend**: in `backend/`, create a venv, `pip install -r requirements.txt`, then `uvicorn app.main:app --port 8000`. Optionally copy `.env.example` to `backend/.env`.
+4. **Frontend**: in `frontend/`, `npm ci` then `npm run dev`. Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the API is not on `http://localhost:8000`.
+5. **Check**: open http://localhost:3000, upload a small PDF, ask a question. `GET http://localhost:8000/health` returns `{"status":"ok"}`.
 
 ## Troubleshooting
+- *"The language model (Ollama) is unavailable"* (503): start Ollama and pull the model.
+- *"ffmpeg is not installed"*: install ffmpeg and make sure `ffmpeg -version` works in the same terminal.
+- *Slow first request*: models are downloaded on first use (embedder ~90 MB, Whisper base ~150 MB, CLIP ~600 MB).
+- *Machine slows down*: keep `USE_RERANKER=0` and `USE_GROUNDING_CHECK=0`, use `WHISPER_MODEL=tiny`, close other heavy apps, and upload short clips first.
+- *CORS error in the browser*: add the frontend origin to `CORS_ORIGINS`.
 
-| Issue | Fix |
-|-------|-----|
-| Ollama connection refused | Start Ollama; verify `OLLAMA_URL` |
-| ffmpeg not found | Install ffmpeg and add to PATH |
-| Slow transcription | Set `WHISPER_MODEL=tiny` in `.env` |
-| CORS errors | Set `CORS_ORIGINS` to your frontend URL |
+## Tests
+`cd backend && pip install -r requirements-dev.txt && pytest` (no model downloads needed).

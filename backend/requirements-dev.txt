@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest
+httpx
+# evaluation harness only (python -m eval.run ...)
+pandas
+pyarrow

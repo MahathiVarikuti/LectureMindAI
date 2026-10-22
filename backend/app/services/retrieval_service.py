@@ -14,9 +14,8 @@ import threading
 from functools import lru_cache
 
 from rank_bm25 import BM25Okapi
-from sentence_transformers import CrossEncoder
-
 from app import config
+from app.db.chroma import build_where
 from app.services.embedding_service import embed_query
 
 _STOPWORDS = set(
@@ -33,6 +32,8 @@ def tokenize(text):
 
 @lru_cache(maxsize=None)
 def get_reranker(name=None):
+    from sentence_transformers import CrossEncoder
+
     return CrossEncoder(name or config.RERANKER_MODEL)
 
 
@@ -68,6 +69,12 @@ class Retriever:
         self.use_reranker = config.USE_RERANKER if use_reranker is None else use_reranker
         self.candidate_k = candidate_k or config.CANDIDATE_K
         self.reranker_model = reranker_model
+        # Score scales differ: reranker probability vs. raw cosine similarity.
+        self.relevance_threshold = (
+            config.RELEVANCE_THRESHOLD if config.RELEVANCE_THRESHOLD is not None
+            else config.RERANKER_RELEVANCE_THRESHOLD if self.use_reranker
+            else config.DENSE_RELEVANCE_THRESHOLD
+        )
         self._bm25 = None
         self._lock = threading.Lock()
 
@@ -87,7 +94,7 @@ class Retriever:
                 self._bm25 = (index, ids, docs, metas)
             return self._bm25
 
-    def _dense(self, query, document_ids):
+    def _dense(self, query, document_ids, session_id=None):
         count = self.collection.count()
         if count == 0:
             return []
@@ -96,8 +103,9 @@ class Retriever:
             "n_results": min(self.candidate_k, count),
             "include": ["documents", "metadatas", "distances"],
         }
-        if document_ids:
-            params["where"] = {"document_id": {"$in": list(document_ids)}}
+        where = build_where(session_id, document_ids)
+        if where:
+            params["where"] = where
         res = self.collection.query(**params)
         hits = []
         for cid, doc, meta, dist in zip(
@@ -107,7 +115,7 @@ class Retriever:
                 hits.append({"id": cid, "text": doc, "metadata": meta or {}, "dense_score": 1 - dist})
         return hits
 
-    def _sparse(self, query, document_ids):
+    def _sparse(self, query, document_ids, session_id=None):
         index, ids, docs, metas = self._bm25_index()
         q = tokenize(query)
         if index is None or not q:
@@ -122,15 +130,18 @@ class Retriever:
             meta = metas[i] or {}
             if allowed is not None and meta.get("document_id") not in allowed:
                 continue
+            # Never surface another session's chunks, even though the BM25 index spans all.
+            if session_id and meta.get("session_id") != session_id:
+                continue
             hits.append({"id": ids[i], "text": docs[i], "metadata": meta, "bm25_score": float(scores[i])})
         return hits
 
-    def retrieve(self, query, document_ids=None, top_k=None):
+    def retrieve(self, query, document_ids=None, top_k=None, session_id=None):
         """Return candidate chunks sorted best-first. Each has a `score` in 0-1:
         the reranker probability if reranking is on, else the cosine similarity."""
         top_k = top_k or self.candidate_k
-        dense = self._dense(query, document_ids)
-        sparse = self._sparse(query, document_ids) if self.use_hybrid else []
+        dense = self._dense(query, document_ids, session_id)
+        sparse = self._sparse(query, document_ids, session_id) if self.use_hybrid else []
 
         fused = {}
         for ranked in (dense, sparse):
@@ -150,21 +161,32 @@ class Retriever:
             candidates.sort(key=lambda c: c["score"], reverse=True)
         else:
             for c in candidates:
-                c["score"] = c.get("dense_score", 0.0)
+                # keyword-only (BM25) hits have no cosine score; give them a neutral one
+                c["score"] = c.get("dense_score", config.DENSE_RELEVANCE_THRESHOLD)
             if not self.use_hybrid:
                 candidates.sort(key=lambda c: c["score"], reverse=True)
         return candidates[:top_k]
 
 
-def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None):
-    """Apply the relevance threshold. Returns (kept_chunks, abstain_reason)."""
+def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None, per_chunk_threshold=True):
+    """Apply the relevance threshold. Returns (kept_chunks, abstain_reason).
+
+    The threshold always gates the *best* chunk (abstain if even that is irrelevant).
+    `per_chunk_threshold` additionally drops every chunk below the threshold: right for
+    reranker probabilities (calibrated), wrong for raw cosine scores, where the right
+    chunk for "what are her projects?" often scores only 0.15-0.3 and was being thrown away.
+    """
     top_k = top_k or config.TOP_K
-    threshold = config.RELEVANCE_THRESHOLD if threshold is None else threshold
+    if threshold is None:
+        threshold = config.RELEVANCE_THRESHOLD
+        if threshold is None:
+            threshold = config.DENSE_RELEVANCE_THRESHOLD
     relative_cutoff = config.RELATIVE_SCORE_CUTOFF if relative_cutoff is None else relative_cutoff
     if not candidates:
         return [], "no_documents"
     best = max(c["score"] for c in candidates)
     if best < threshold:
         return [], "low_relevance"
-    kept = [c for c in candidates[:top_k] if c["score"] >= max(threshold, best * relative_cutoff)]
+    floor = max(threshold, best * relative_cutoff) if per_chunk_threshold else best * relative_cutoff
+    kept = [c for c in candidates[:top_k] if c["score"] >= floor]
     return kept, None

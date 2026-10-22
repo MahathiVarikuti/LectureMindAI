@@ -27,7 +27,7 @@ from app.services.rag_pipeline import answer_question
 from app.services.retrieval_service import Retriever, select_context
 from app.utils.chunker import chunk_text, chunk_text_fixed
 from eval import metrics
-from eval.datasets import LOADERS, load_ragtruth
+from eval.datasets import LOADERS, load_ragbench, load_ragtruth
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
 _client = chromadb.EphemeralClient()
@@ -136,22 +136,32 @@ def cmd_threshold(args):
     rng = random.Random(0)
     pos = [q for q in questions if q["scope"] == "in_scope" and q["answerable"]]
     neg = [q for q in questions if q["scope"] == "out_of_scope"]
-    rng.shuffle(pos), rng.shuffle(neg)
-    pos, neg = pos[:args.n], neg[:args.n]
-    print(f"{args.dataset}: {len(pos)} in-scope vs {len(neg)} out-of-scope questions")
+    # "Hard" negatives: the document IS indexed but does not answer the question
+    # (SQuAD v2 / QASPER unanswerable). Retrieval finds on-topic chunks, so the
+    # relevance score is much less separable than for out-of-corpus questions.
+    hard = [q for q in questions if q["scope"] == "in_scope" and not q["answerable"]]
+    rng.shuffle(pos), rng.shuffle(neg), rng.shuffle(hard)
+    pos, neg, hard = pos[:args.n], neg[:args.n], hard[:args.n]
+    print(f"{args.dataset}: {len(pos)} answerable vs {len(neg)} out-of-corpus vs {len(hard)} in-corpus unanswerable")
     report = {"dataset": args.dataset, "configs": {}}
     for name in ("dense_bge", "hybrid_rerank"):
         retriever = make_retriever(docs, RETRIEVAL_CONFIGS[name], args.dataset)
         top = lambda q: (retriever.retrieve(q["question"], top_k=1) or [{"score": 0.0}])[0]["score"]
-        ps, ns = [top(q) for q in pos], [top(q) for q in neg]
-        rows, best = metrics.sweep_threshold(ps, ns)
-        auc = metrics.auroc(ps, ns)
-        report["configs"][name] = {"auroc": auc, "best": best, "sweep": rows,
-                                   "in_scope_median": statistics.median(ps), "out_scope_median": statistics.median(ns)}
-        print(f"\n[{name}] score separation AUROC = {auc:.3f}  (median in-scope {statistics.median(ps):.3f}, out-of-scope {statistics.median(ns):.3f})")
-        table([r for r in rows if r["threshold"] in (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7) or r is best],
-              ["threshold", "answer_rate_in_scope", "abstain_rate_out_of_scope", "balanced_accuracy"])
-        print(f"best threshold = {best['threshold']} (balanced accuracy {best['balanced_accuracy']:.3f})")
+        ps, ns, hs = [top(q) for q in pos], [top(q) for q in neg], [top(q) for q in hard]
+        entry = {}
+        for label, negatives in (("out_of_corpus", ns), ("in_corpus_unanswerable", hs), ("combined", ns + hs)):
+            if not negatives:
+                continue
+            rows, best = metrics.sweep_threshold(ps, negatives)
+            auc = metrics.auroc(ps, negatives)
+            entry[label] = {"auroc": auc, "best": best, "sweep": rows,
+                            "negative_median": statistics.median(negatives)}
+            print(f"\n[{name} | negatives={label}] AUROC = {auc:.3f} "
+                  f"(median answerable {statistics.median(ps):.3f}, negatives {statistics.median(negatives):.3f})")
+            table([r for r in rows if r["threshold"] in (0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7) or r is best],
+                  ["threshold", "answer_rate_in_scope", "abstain_rate_out_of_scope", "balanced_accuracy"])
+            print(f"best threshold = {best['threshold']} (balanced accuracy {best['balanced_accuracy']:.3f})")
+        report["configs"][name] = {"answerable_median": statistics.median(ps), **entry}
     print("\nNote: abstaining on out-of-scope questions only matters if it does not cost too many in-scope answers;"
           " prefer a threshold that keeps answer_rate_in_scope >= ~0.95.")
     save(f"threshold_{args.dataset}", report)
@@ -176,7 +186,7 @@ def cmd_generation(args):
         rng.shuffle(qs)
         sample += [{**q, "group": g} for q in qs[:n_each[g]]]
     retriever = make_retriever(docs, RETRIEVAL_CONFIGS["hybrid_rerank"], args.dataset)
-    threshold = args.threshold if args.threshold is not None else config.RELEVANCE_THRESHOLD
+    threshold = args.threshold if args.threshold is not None else retriever.relevance_threshold
     print(f"{args.dataset}: {len(sample)} questions "
           f"({', '.join(f'{g}={sum(s['group'] == g for s in sample)}' for g in groups)}), threshold={threshold}")
 
@@ -226,8 +236,8 @@ def cmd_generation(args):
 
 # --- 4. hallucination detector vs human labels (RAGTruth) -------------------
 def cmd_hallucination(args):
-    rows = load_ragtruth(n=args.n)
-    print(f"RAGTruth QA: {len(rows)} responses, {sum(r['hallucinated'] for r in rows)} labelled hallucinated")
+    rows = load_ragbench(n=args.n) if args.source == "ragbench" else load_ragtruth(n=args.n)
+    print(f"{args.source}: {len(rows)} responses, {sum(r['hallucinated'] for r in rows)} labelled hallucinated")
     scores, labels = [], []
     for i, r in enumerate(rows):
         contexts = chunk_text(r["context"])
@@ -257,7 +267,7 @@ def cmd_hallucination(args):
     out["current_config"] = {"GROUNDEDNESS_THRESHOLD": config.GROUNDEDNESS_THRESHOLD, **current}
     print(f"\ncurrent GROUNDEDNESS_THRESHOLD={config.GROUNDEDNESS_THRESHOLD}: "
           f"precision {current['precision']:.3f}, recall {current['recall']:.3f}, F1 {current['f1']:.3f}")
-    save("hallucination_ragtruth", out, scores)
+    save(f"hallucination_{args.source}", out, scores)
 
 
 # --- 5. conversational query rewriting (CoQA) --------------------------------
@@ -293,12 +303,17 @@ def main():
     p.add_argument("--dataset", default="qasper", choices=list(LOADERS))
     p.add_argument("--docs", type=int, help="number of documents to index")
     p.add_argument("-n", type=int, default=200, help="number of questions / samples")
+    p.add_argument("--source", default="ragtruth", choices=["ragtruth", "ragbench"],
+                   help="labelled hallucination data for the `hallucination` command")
+    p.add_argument("--nli-model", help="override NLI_MODEL for the grounding check (e.g. cross-encoder/nli-deberta-v3-base)")
     p.add_argument("--configs", nargs="+", default=list(RETRIEVAL_CONFIGS), choices=list(RETRIEVAL_CONFIGS))
     p.add_argument("--models", nargs="+", default=[config.LLM_MODEL])
     p.add_argument("--threshold", type=float, help="override RELEVANCE_THRESHOLD")
     p.add_argument("--embed-model", help="also evaluate this (e.g. fine-tuned) embedding model")
     p.add_argument("--no-grounding", action="store_true", help="skip the NLI grounding check (faster)")
     args = p.parse_args()
+    if args.nli_model:
+        config.NLI_MODEL = args.nli_model
     if args.embed_model:
         RETRIEVAL_CONFIGS["custom_dense"] = dict(chunker="smart", embed=args.embed_model, hybrid=False, rerank=False)
         RETRIEVAL_CONFIGS["custom_hybrid_rerank"] = dict(chunker="smart", embed=args.embed_model, hybrid=True, rerank=True)

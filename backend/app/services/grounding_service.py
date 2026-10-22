@@ -9,8 +9,6 @@ import re
 from functools import lru_cache
 
 import numpy as np
-from sentence_transformers import CrossEncoder
-
 from app import config
 
 _CITATION = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
@@ -23,6 +21,8 @@ _STOPWORDS = {
 
 @lru_cache(maxsize=None)
 def get_nli_model(name=None):
+    from sentence_transformers import CrossEncoder
+
     model = CrossEncoder(name or config.NLI_MODEL)
     labels = {v.lower(): int(k) for k, v in model.model.config.id2label.items()}
     return model, labels["entailment"]

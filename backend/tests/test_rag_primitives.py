@@ -50,3 +50,16 @@ class RagPrimitiveTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DenseContextTests(unittest.TestCase):
+    def test_dense_mode_keeps_low_scoring_chunks_when_best_passes(self):
+        candidates = [{"id": f"c{i}", "text": "t", "score": s} for i, s in enumerate([0.31, 0.22, 0.18, 0.12])]
+        kept, reason = select_context(candidates, top_k=4, threshold=0.25, per_chunk_threshold=False)
+        self.assertIsNone(reason)
+        self.assertEqual(len(kept), 4)
+
+    def test_reranker_mode_still_drops_chunks_below_threshold(self):
+        candidates = [{"id": "a", "text": "t", "score": 0.9}, {"id": "b", "text": "t", "score": 0.05}]
+        kept, _ = select_context(candidates, top_k=4, threshold=0.125, per_chunk_threshold=True)
+        self.assertEqual([c["id"] for c in kept], ["a"])

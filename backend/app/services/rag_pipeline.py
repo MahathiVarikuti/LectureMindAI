@@ -8,8 +8,14 @@
 import time
 
 from app import config
-from app.services.grounding_service import check_grounding
-from app.services.llm_service import generate_answer, is_not_found, rewrite_query
+from app.services.frame_retrieval import retrieve_frames
+from app.services.llm_service import (
+    format_context,
+    format_timestamp,
+    generate_answer,
+    is_not_found,
+    rewrite_query,
+)
 from app.services.retrieval_service import select_context
 
 
@@ -19,7 +25,11 @@ def _source(chunk):
         "chunk_id": chunk["id"],
         "document_id": meta.get("document_id"),
         "filename": meta.get("filename"),
+        "modality": meta.get("modality"),
         "page": meta.get("page"),
+        "timestamp_start": meta.get("timestamp_start"),
+        "timestamp_end": meta.get("timestamp_end"),
+        "timestamp": meta.get("timestamp"),
         "text": chunk["text"],
         "score": round(float(chunk["score"]), 4),
     }
@@ -34,6 +44,7 @@ def answer_question(
     relevance_threshold=None,
     grounding=None,
     rewrite=True,
+    session_id=None,
 ):
     timings = {}
     t0 = time.perf_counter()
@@ -42,8 +53,16 @@ def answer_question(
     timings["rewrite"] = time.perf_counter() - t0
 
     t = time.perf_counter()
-    candidates = retriever.retrieve(search_query, document_ids=document_ids)
-    chunks, abstain_reason = select_context(candidates, threshold=relevance_threshold)
+    candidates = retriever.retrieve(search_query, document_ids=document_ids, session_id=session_id)
+    if relevance_threshold is None:
+        relevance_threshold = getattr(retriever, "relevance_threshold", None)
+    chunks, abstain_reason = select_context(
+        candidates, threshold=relevance_threshold,
+        per_chunk_threshold=getattr(retriever, "use_reranker", True),
+    )
+    # Visual matches come from the separate image collection (session-scoped; skipped
+    # entirely when the session has no video frames).
+    frames = retrieve_frames(search_query, session_id, document_ids) if session_id else []
     timings["retrieval"] = time.perf_counter() - t
 
     result = {
@@ -53,17 +72,31 @@ def answer_question(
         "abstained": True,
         "abstain_reason": abstain_reason,
         "top_score": round(float(candidates[0]["score"]), 4) if candidates else 0.0,
-        "sources": [_source(c) for c in chunks],
+        "sources": [_source(c) for c in chunks] + [_source(f) for f in frames],
+        "context": "",
         "grounding": None,
         "flagged": False,
         "timings": timings,
     }
     if abstain_reason:
+        if frames:
+            # No text matched, but some frames look relevant. Frames carry no text the
+            # LLM could ground an answer in, so list them directly without an LLM call.
+            listing = "\n".join(
+                f"- {f['metadata'].get('filename', 'video')} at "
+                f"{format_timestamp(f['metadata'].get('timestamp'))}" for f in frames
+            )
+            result.update(
+                answer="No transcript or text matched, but these video moments look visually related:\n"
+                       + listing,
+                abstained=False, abstain_reason=None,
+            )
         timings["total"] = time.perf_counter() - t0
         return result
 
     t = time.perf_counter()
-    answer = generate_answer(search_query, chunks, model=model)
+    result["context"] = format_context(chunks, frames)
+    answer = generate_answer(search_query, chunks, model=model, frames=frames)
     timings["generation"] = time.perf_counter() - t
     result["answer"] = answer
 
@@ -75,6 +108,8 @@ def answer_question(
 
     use_grounding = config.USE_GROUNDING_CHECK if grounding is None else grounding
     if use_grounding:
+        from app.services.grounding_service import check_grounding
+
         t = time.perf_counter()
         report = check_grounding(answer, [c["text"] for c in chunks])
         timings["grounding"] = time.perf_counter() - t

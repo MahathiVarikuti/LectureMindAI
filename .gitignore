@@ -11,3 +11,12 @@ node_modules/
 backend/eval/data/
 backend/eval/results/*.jsonl
 backend/models/
+.env.*
+!.env.example
+backend/chroma_db/
+backend/data/
+data/
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/

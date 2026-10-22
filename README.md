@@ -1,112 +1,74 @@
 # LectureMindAI
 
-Multimodal RAG system for lecture materials. Upload PDFs, audio, video, or URLs and ask natural-language questions with grounded answers and source citations.
+A full-stack, multimodal Retrieval-Augmented Generation (RAG) app. Upload lecture material (PDFs, audio, video, or a URL to your own / openly-licensed recording), ask questions in natural language, and get answers grounded in that material with **citations**: page numbers for PDFs, timestamps for audio/video.
+
+Everything is free and local: a local LLM (Ollama), local embeddings, local vector store (ChromaDB), SQLite. No LangChain / LlamaIndex: chunking, retrieval, prompting and session handling are written directly.
 
 ## Features
-
-- PDF, audio, video upload and URL ingestion (yt-dlp)
-- Local LLM answers via Ollama (`qwen2.5:1.5b`)
-- Source citations: page numbers (PDF) and timestamps (audio/video)
-- Cross-modal retrieval: text chunks + video frames
-- Session-based usage (no login), persistent chat history in SQLite
-- Document management: list, scope queries, delete
+- PDF, audio (Whisper), video (transcript **and** sampled frames via CLIP) and URL (yt-dlp) ingestion
+- Chat with follow-up questions (query rewriting from history), grounded answers, refusal when nothing relevant is found (the LLM is not even called)
+- Cross-modal retrieval: one query can cite text chunks and video frames
+- Per-browser sessions (no login); documents and chat history are scoped to the session and persisted (SQLite)
+- Document list, selection (scope a query to chosen documents) and delete (vectors + file)
+- Rate limiting, upload/duration/storage limits, restricted CORS, env-based config
 
 ## Architecture
-
 ```
-┌─────────────┐     HTTP      ┌──────────────┐
-│  Next.js    │ ────────────► │   FastAPI    │
-│  Frontend   │               │   Backend    │
-└─────────────┘               └──────┬───────┘
-                                     │
-              ┌──────────────────────┼──────────────────────┐
-              ▼                      ▼                      ▼
-         SQLite (chat)          ChromaDB              File storage
-                            text_chunks + image_frames
-                                     │
-              ┌──────────────────────┼──────────────────────┐
-              ▼                      ▼                      ▼
-         Ollama LLM          SentenceTransformers      faster-whisper + CLIP
+Next.js (Tailwind, Axios, react-markdown)
+        |  session_id (UUID in localStorage) on every request
+        v
+FastAPI  --- /upload /upload-url /query /documents /history /health
+   |-- ingestion: PyMuPDF | ffmpeg + faster-whisper | CLIP (frames) | yt-dlp
+   |-- ChromaDB   text_chunks (MiniLM) | image_frames (CLIP)   <- separate collections
+   |-- SQLite     chat history + document ownership
+   `-- Ollama     qwen2.5:1.5b  (/api/generate, stream: false)
 ```
+Details: [docs/architecture.md](docs/architecture.md). Security model and its limits: [docs/security.md](docs/security.md).
 
-See [docs/architecture.md](docs/architecture.md) for details.
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.11+, Node.js 18+
-- [Ollama](https://ollama.ai/) with `qwen2.5:1.5b` pulled
-- [ffmpeg](https://ffmpeg.org/) on PATH
+## Setup
+Prerequisites: Python 3.11+, Node 20+, [ffmpeg](https://ffmpeg.org/) on PATH (`winget install ffmpeg` / `apt install ffmpeg` / `brew install ffmpeg`), [Ollama](https://ollama.com/).
 
 ```bash
 ollama pull qwen2.5:1.5b
-```
 
-### Backend
-
-```bash
+# backend
 cd backend
-python -m venv venv
-venv\Scripts\activate          # Windows
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
+cp ../.env.example .env                                  # optional: every value has a default
+uvicorn app.main:app --port 8000
 
-### Frontend
-
-```bash
+# frontend (new terminal)
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run dev                                              # http://localhost:3000
 ```
+The first upload/query downloads the embedding model (and Whisper/CLIP when you ingest media), so it is slow once.
 
-Open http://localhost:3000
+**Low-RAM machines:** the defaults are the lightest configuration (dense retrieval only, no reranker, no NLI check, one ingestion at a time, Whisper `base`). Use `WHISPER_MODEL=tiny` for faster transcription.
 
-Full setup: [docs/setup.md](docs/setup.md)
+### Docker
+```bash
+docker compose up --build
+docker compose exec ollama ollama pull qwen2.5:1.5b      # first run only
+```
+Frontend: http://localhost:3000, API: http://localhost:8000.
 
-## Environment Variables
-
-Copy `.env.example` to `.env` and adjust. Key variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:1.5b` | LLM model name |
-| `WHISPER_MODEL` | `base` | faster-whisper model size |
-| `CHUNK_SIZE` | `1000` | Text chunk size (chars) |
-| `CORS_ORIGINS` | `http://localhost:3000` | Allowed frontend origins |
+## Configuration
+All settings are environment variables (see [.env.example](.env.example) for the documented list): Ollama URL/model/timeouts, model names, chunk size/overlap, storage paths, resource limits (25 MB PDF, 30 min media, 500 MB and 20 documents per session), rate limits, CORS origins.
 
 ## Tests
-
 ```bash
 cd backend
-pytest -v
+pip install -r requirements-dev.txt
+pytest
 ```
+The suite fakes the embedder, LLM, Whisper and CLIP, so it needs no model downloads. It covers chunking, upload limits, every modality's round trip, **session isolation**, deletion (vectors + file), the empty-context guard, rate limiting and error mapping. It never asserts exact LLM wording.
 
-## Docker
+## Evaluation
+Retrieval, abstention-threshold, hallucination and model-size experiments (QASPER, SQuAD v2, CoQA, RAGTruth, RAGBench) live in `backend/eval/`; see [docs/evaluation.md](docs/evaluation.md). They also power the optional hybrid search, reranker and NLI grounding check (`USE_HYBRID`, `USE_RERANKER`, `USE_GROUNDING_CHECK`, all off by default).
 
-```bash
-docker-compose up --build
-```
-
-Ollama must run on the host (or a reachable container). Set `OLLAMA_URL` accordingly.
-
-## Deployment
-
-Free-tier deployment options (Render, Railway, Fly.io) can host the FastAPI backend and Next.js frontend, but **Ollama requires significant CPU/RAM** (~2GB+ for qwen2.5:1.5b). Most free tiers cannot run Ollama alongside the app.
-
-**Recommended approach:**
-1. Run Ollama on a local machine or a dedicated VPS with ≥4GB RAM
-2. Deploy backend + frontend to a free host, pointing `OLLAMA_URL` to your Ollama instance
-3. If Ollama is unavailable, queries will fail gracefully with an error message
-
-Alternative: run everything locally via `docker-compose` with Ollama installed on the host.
-
-## Security
-
-Session-based isolation without login. See [docs/security.md](docs/security.md).
-
-## License
-
-MIT
+## Known limitations
+- Sessions are browser-local UUIDs: clearing site data or switching browsers loses access to earlier documents and history. This is an accepted V1 trade-off, not real authentication.
+- Scanned PDFs (no text layer) are rejected; there is no OCR.
+- yt-dlp import is for your own or openly-licensed content only.

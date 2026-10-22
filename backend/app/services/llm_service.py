@@ -3,15 +3,18 @@ import re
 import requests
 
 from app import config
+from app.config import settings
 
 SYSTEM_PROMPT = f"""You are LectureMind, a study assistant that answers questions about the student's uploaded lecture material.
 
 Rules:
 1. Use ONLY the numbered context passages. Do not use outside knowledge, even if you know the answer.
 2. Cite the passage numbers you used in square brackets after each claim, e.g. "Gradient descent minimises the loss [2]."
-3. If the passages do not contain the answer, reply with exactly: "{config.NOT_FOUND_ANSWER}"
-4. If the passages only partly answer the question, answer that part and say what is missing.
-5. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
+3. Always answer from the passages when ANY of them relates to the question, even if the match is partial or the wording differs (for example "projects" may appear under a heading such as PROJECTS; list the items under it). Quote or summarise what the passages say.
+4. Only if NONE of the passages relates to the question, reply with exactly: "{config.NOT_FOUND_ANSWER}"
+5. If the passages only partly answer the question, answer that part and say what is missing.
+6. Give a complete answer: when the question asks for a list ("projects", "skills", "certifications"), list EVERY item found in the passages as bullet points with a short description and cite the passage, e.g. "- Machine Learning with Python (IBM) [1]". Never reply with only a heading or a single word.
+7. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
 
 REWRITE_PROMPT = """Rewrite the user's latest question so it can be understood without the conversation.
 Replace pronouns like "it", "this", "they" with what they refer to. Keep it short.
@@ -39,37 +42,67 @@ _FOLLOW_UP = re.compile(
 )
 
 
-def chat(messages, model=None, temperature=None, num_ctx=None, timeout=300):
+def chat(messages, model=None, temperature=None, num_ctx=None, timeout=None):
+    """One non-streaming completion via Ollama's /api/generate.
+
+    `messages` is a [{"role", "content"}] list (system + user); it is folded into the
+    generate endpoint's `system` and `prompt` fields. A timeout is always set so a
+    stuck Ollama surfaces as requests.Timeout instead of hanging the API.
+    """
+    system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+    prompt = "\n\n".join(m["content"] for m in messages if m["role"] != "system")
     response = requests.post(
-        f"{config.OLLAMA_URL}/api/chat",
+        f"{config.OLLAMA_URL}/api/generate",
         json={
             "model": model or config.LLM_MODEL,
-            "messages": messages,
+            "system": system,
+            "prompt": prompt,
             "stream": False,
             "options": {
                 "temperature": config.LLM_TEMPERATURE if temperature is None else temperature,
                 "num_ctx": num_ctx or config.LLM_NUM_CTX,
             },
         },
-        timeout=timeout,
+        timeout=timeout or settings.ollama_timeout,
     )
     response.raise_for_status()
-    return response.json()["message"]["content"].strip()
+    return response.json()["response"].strip()
 
 
-def format_context(chunks):
+def format_timestamp(seconds):
+    seconds = int(seconds or 0)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+def format_context(chunks, frames=None):
     parts = []
     for i, chunk in enumerate(chunks, start=1):
         meta = chunk.get("metadata") or {}
         source = meta.get("filename", "unknown")
         if meta.get("page"):
             source += f", page {meta['page']}"
+        if meta.get("timestamp_start") is not None:
+            source += f", {format_timestamp(meta['timestamp_start'])}"
+            if meta.get("timestamp_end") is not None:
+                source += f"-{format_timestamp(meta['timestamp_end'])}"
         parts.append(f"[{i}] ({source})\n{chunk['text']}")
-    return "\n\n".join(parts)
+    text = "\n\n".join(parts)
+    if frames:
+        # CLIP scores are not comparable with text scores, so frames get their own
+        # labelled section instead of being interleaved into one ranked list.
+        listing = "\n".join(
+            f"- {(f.get('metadata') or {}).get('filename', 'video')} at "
+            f"{format_timestamp((f.get('metadata') or {}).get('timestamp'))}"
+            for f in frames
+        )
+        text += "\n\nVisually related video frames (images, no text):\n" + listing
+    return text
 
 
-def generate_answer(query, chunks, model=None):
-    user = f"Context passages:\n\n{format_context(chunks)}\n\nQuestion: {query}"
+def generate_answer(query, chunks, model=None, frames=None):
+    user = f"Context passages:\n\n{format_context(chunks, frames)}\n\nQuestion: {query}"
     return chat(
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
         model=model,
