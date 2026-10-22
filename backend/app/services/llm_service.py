@@ -13,7 +13,8 @@ Rules:
 3. Always answer from the passages when ANY of them relates to the question, even if the match is partial or the wording differs (for example "projects" may appear under a heading such as PROJECTS; list the items under it). Quote or summarise what the passages say.
 4. Only if NONE of the passages relates to the question, reply with exactly: "{config.NOT_FOUND_ANSWER}"
 5. If the passages only partly answer the question, answer that part and say what is missing.
-6. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
+6. Give a complete answer: when the question asks for a list ("projects", "skills", "certifications"), list EVERY item found in the passages as bullet points with a short description and cite the passage, e.g. "- Machine Learning with Python (IBM) [1]". Never reply with only a heading or a single word.
+7. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
 
 REWRITE_PROMPT = """Rewrite the user's latest question so it can be understood without the conversation.
 Replace pronouns like "it", "this", "they" with what they refer to. Keep it short.
