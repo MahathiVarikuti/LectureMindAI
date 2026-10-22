@@ -23,7 +23,7 @@ FastAPI  --- /upload /upload-url /query /documents /history /health
    |-- SQLite     chat history + document ownership
    `-- Ollama     qwen2.5:1.5b  (/api/generate, stream: false)
 ```
-Details: [docs/architecture.md](docs/architecture.md). Security model and its limits: [docs/security.md](docs/security.md).
+Details: [docs/architecture.md](docs/architecture.md). Security model and its limits: [docs/security.md](docs/security.md). Full code walkthrough with known issues and interview notes: [docs/PROJECT_WALKTHROUGH.md](docs/PROJECT_WALKTHROUGH.md).
 
 ## Setup
 Prerequisites: Python 3.11+, Node 20+, [ffmpeg](https://ffmpeg.org/) on PATH (`winget install ffmpeg` / `apt install ffmpeg` / `brew install ffmpeg`), [Ollama](https://ollama.com/).
@@ -54,6 +54,22 @@ docker compose exec ollama ollama pull qwen2.5:1.5b      # first run only
 ```
 Frontend: http://localhost:3000, API: http://localhost:8000.
 
+## Tuning for a CPU-only laptop
+Environment variables (PowerShell: `$env:NAME="value"` before `uvicorn`):
+
+| Variable | Suggested | Why |
+|---|---|---|
+| `LLM_MODEL` | `qwen2.5:3b` for better answers, `qwen2.5:1.5b` (default) for speed | the 1.5b model sometimes answers with a bare heading or over-refuses |
+| `USE_HYBRID` | `1` | adds keyword (BM25) search; helps section words like "projects" |
+| `TOP_K` | `4`-`6` | chunks sent to the LLM |
+| `LLM_NUM_CTX` | `4096` | smaller context = faster on CPU |
+| `OLLAMA_TIMEOUT` | `300` | first request after a restart loads the model and can be slow |
+
+Warm the model first (`ollama run qwen2.5:3b "hi"`). Re-upload documents after changing chunking or the embedding model.
+
+## How chunking works
+PDF text is split at section headings (short ALL-CAPS lines such as `EDUCATION` or `PROJECTS`), entries inside a section (for example one project) stay together, and each chunk is prefixed with its heading. Documents without headings use overlapping paragraph/sentence chunks (1000 characters, 200 overlap). Audio/video transcripts are chunked by segment so each chunk keeps its start/end timestamps.
+
 ## Configuration
 All settings are environment variables (see [.env.example](.env.example) for the documented list): Ollama URL/model/timeouts, model names, chunk size/overlap, storage paths, resource limits (25 MB PDF, 30 min media, 500 MB and 20 documents per session), rate limits, CORS origins.
 
@@ -69,6 +85,9 @@ The suite fakes the embedder, LLM, Whisper and CLIP, so it needs no model downlo
 Retrieval, abstention-threshold, hallucination and model-size experiments (QASPER, SQuAD v2, CoQA, RAGTruth, RAGBench) live in `backend/eval/`; see [docs/evaluation.md](docs/evaluation.md). They also power the optional hybrid search, reranker and NLI grounding check (`USE_HYBRID`, `USE_RERANKER`, `USE_GROUNDING_CHECK`, all off by default).
 
 ## Known limitations
+- Audio, video and URL ingestion are implemented and tested with fakes; the PDF path is the one exercised end to end with real models.
+- With `USE_HYBRID=1` the relevance threshold is weaker (keyword-only matches get a neutral score), so the LLM's own refusal does more of the work. See the walkthrough, section 4.
+- The `model` field of `/query` is client-controlled; do not expose the API publicly without restricting it.
 - Sessions are browser-local UUIDs: clearing site data or switching browsers loses access to earlier documents and history. This is an accepted V1 trade-off, not real authentication.
 - Scanned PDFs (no text layer) are rejected; there is no OCR.
 - yt-dlp import is for your own or openly-licensed content only.
