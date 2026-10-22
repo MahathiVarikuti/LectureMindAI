@@ -48,3 +48,35 @@ class TestValidation:
         assert "/" not in safe_filename("../../etc/passwd")
         assert safe_filename("..\\..\\x.pdf") == "x.pdf"
         assert safe_filename("") == "upload"
+
+
+class TestSectionAwareChunking:
+    """Regression for the resume case: sections and entries must not be cut or merged."""
+
+    @staticmethod
+    def _chunks():
+        from pathlib import Path
+        return chunk_text(Path(__file__).with_name("resume_sample.txt").read_text(encoding="utf-8"))
+
+    def test_each_project_is_its_own_chunk_with_heading(self):
+        projects = [c for c in self._chunks() if c.startswith("PROJECTS")]
+        assert len(projects) == 3
+        for name in ("Data Quality Intelligence Platform", "FaceFindr", "LectureMind AI"):
+            assert sum(name in c for c in projects) == 1
+
+    def test_sections_are_not_merged(self):
+        chunks = self._chunks()
+        cert = next(c for c in chunks if c.startswith("CERTIFICATIONS"))
+        assert "Web Development (IBM)" in cert and "LEADERSHIP" not in cert
+        edu = next(c for c in chunks if c.startswith("EDUCATION"))
+        assert "EXPERIENCE" not in edu
+
+    def test_no_chunk_starts_mid_bullet(self):
+        for c in self._chunks():
+            body = c.split("\n", 1)[1] if "\n" in c else c
+            assert not body.lstrip().startswith("●")
+
+    def test_plain_prose_without_headings_is_unchanged(self):
+        text = "Gradient descent minimises a loss. " * 60
+        chunks = chunk_text(text, chunk_size=300, overlap=50, min_chars=1)
+        assert len(chunks) > 1 and all(len(c) <= 300 for c in chunks)
