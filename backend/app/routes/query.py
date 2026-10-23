@@ -1,9 +1,10 @@
 import requests
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.concurrency import run_in_threadpool
 
+from app import config
 from app.db import sqlite
-from app.dependencies import get_retriever, validate_session_id
+from app.dependencies import get_retriever, resolve_session_id, validate_session_id
 from app.errors import AppError
 from app.limiter import limiter, query_limit
 from app.models import QueryRequest
@@ -28,6 +29,8 @@ def _run_query(body: QueryRequest, session_id: str, document_ids):
 @limiter.limit(query_limit)
 async def query_rag(request: Request, body: QueryRequest):
     session_id = validate_session_id(body.session_id)
+    if body.model and body.model not in config.ALLOWED_MODELS:
+        raise AppError(400, "The requested language model is not allowed.")
     if not body.query.strip():
         raise AppError(400, "Query is empty.")
 
@@ -54,11 +57,11 @@ async def query_rag(request: Request, body: QueryRequest):
 
 
 @router.get("/history")
-def history(session_id: str):
-    return {"messages": get_full_history(validate_session_id(session_id))}
+def history(session_id: str | None = None, x_session_id: str | None = Header(None)):
+    return {"messages": get_full_history(resolve_session_id(session_id, x_session_id))}
 
 
 @router.delete("/history")
-def reset_history(session_id: str):
-    clear_session(validate_session_id(session_id))
+def reset_history(session_id: str | None = None, x_session_id: str | None = Header(None)):
+    clear_session(resolve_session_id(session_id, x_session_id))
     return {"message": "Conversation cleared"}

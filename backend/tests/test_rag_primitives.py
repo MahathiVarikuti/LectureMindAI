@@ -1,7 +1,9 @@
 import unittest
 
+from app import config
+from app.services.llm_service import is_not_found
 from app.services.rag_pipeline import _source
-from app.services.retrieval_service import select_context
+from app.services.retrieval_service import Retriever, select_context
 from app.utils.chunker import chunk_text
 
 
@@ -46,6 +48,32 @@ class RagPrimitiveTests(unittest.TestCase):
         self.assertEqual(source["chunk_id"], "document-123_7")
         self.assertEqual(source["document_id"], "document-123")
         self.assertEqual(source["score"], 0.8765)
+
+    def test_sparse_only_hit_cannot_satisfy_abstain_threshold(self):
+        kept, reason = select_context([
+            {"id": "sparse", "score": 0.99, "sparse_only": True},
+            {"id": "dense", "score": 0.1, "sparse_only": False},
+        ], threshold=0.2)
+        self.assertEqual(kept, [])
+        self.assertEqual(reason, "low_relevance")
+
+    def test_top_score_is_best_candidate(self):
+        class FakeRetriever:
+            relevance_threshold = 0.1
+
+            def retrieve(self, *args, **kwargs):
+                return [
+                    {"id": "first", "text": "first", "score": 0.2, "metadata": {}},
+                    {"id": "best", "text": "best", "score": 0.8, "metadata": {}},
+                ]
+
+        from app.services.rag_pipeline import answer_question
+        result = answer_question("question", FakeRetriever(), rewrite=False, session_id=None)
+        self.assertEqual(result["top_score"], 0.8)
+
+    def test_not_found_requires_exact_sentence(self):
+        self.assertTrue(is_not_found(" I COULD NOT FIND THAT INFORMATION IN THE UPLOADED MATERIAL. [1] "))
+        self.assertFalse(is_not_found("I could not find that information in the uploaded material, but here is more."))
 
 
 if __name__ == "__main__":

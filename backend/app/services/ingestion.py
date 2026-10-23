@@ -17,7 +17,7 @@ from app.dependencies import get_retriever
 from app.errors import AppError
 from app.services.embedding_service import embed_documents
 from app.services.pdf_service import extract_text_from_pdf
-from app.utils.chunker import chunk_segments, chunk_text
+from app.utils.chunker import chunk_pages, chunk_segments
 from app.utils.media import extract_audio, get_media_duration, sample_frames
 
 ADD_BATCH = 500
@@ -57,6 +57,21 @@ def check_duration(path: str) -> float:
 def purge_vectors(document_id: str) -> None:
     for collection in (text_collection(), image_collection()):
         collection.delete(where={"document_id": document_id})
+    get_retriever().invalidate()
+
+
+def reconcile_orphans(session_id: str | None = None) -> None:
+    """Remove vectors whose document ownership row no longer exists."""
+    known = sqlite.document_ids(session_id)
+    for collection in (text_collection(), image_collection()):
+        data = collection.get(include=["metadatas"])
+        orphan_ids = [
+            vector_id for vector_id, meta in zip(data["ids"], data.get("metadatas") or [])
+            if (not session_id or (meta or {}).get("session_id") == session_id)
+            and (meta or {}).get("document_id") not in known
+        ]
+        if orphan_ids:
+            collection.delete(ids=orphan_ids)
     get_retriever().invalidate()
 
 
@@ -119,10 +134,7 @@ def ingest_pdf(session_id, document_id, path, filename, file_hash=None, stored_p
     size = Path(path).stat().st_size
     try:
         with ingestion_slot():
-            chunks = []
-            for page in extract_text_from_pdf(pdf_path=str(path)):
-                for text in chunk_text(page["text"]):
-                    chunks.append({"text": text, "page": page["page"]})
+            chunks = chunk_pages(extract_text_from_pdf(pdf_path=str(path)))
             if not chunks:
                 raise AppError(422, "No extractable text found. The PDF may be scanned images (needs OCR).")
             count = _store_text(session_id, document_id, filename, "pdf", chunks)

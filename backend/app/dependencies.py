@@ -25,3 +25,8 @@ def validate_session_id(value: str) -> str:
     if parsed.version != 4:
         raise AppError(400, "session_id must be a valid UUID v4.")
     return str(parsed)
+
+
+def resolve_session_id(session_id: str | None, header_session_id: str | None) -> str:
+    """Resolve the header first while retaining the query parameter for compatibility."""
+    return validate_session_id(header_session_id or session_id or "")

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import sqlite3
 import uuid
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -64,7 +65,20 @@ async def upload(request: Request, file: UploadFile = File(...), session_id: str
                     "duplicate": True, "message": "This file was already uploaded."}
         ingest = {"pdf": ingestion.ingest_pdf, "audio": ingestion.ingest_audio,
                   "video": ingestion.ingest_video}[modality]
-        return await run_in_threadpool(ingest, session_id, document_id, dest, filename, file_hash, dest)
+        try:
+            return await run_in_threadpool(
+                ingest, session_id, document_id, dest, filename, file_hash, dest
+            )
+        except sqlite3.IntegrityError:
+            existing = sqlite.find_by_hash(session_id, file_hash)
+            if existing is None:
+                raise
+            ingestion.purge_vectors(document_id)
+            return {
+                "document_id": existing["document_id"], "filename": existing["filename"],
+                "chunks": existing["chunk_count"], "modality": existing["modality"],
+                "duplicate": True, "message": "This file was already uploaded.",
+            }
     except BaseException:
         if os.path.exists(dest):
             os.remove(dest)

@@ -55,6 +55,7 @@ def _download(url: str, tmp: Path, want_video: bool) -> tuple[Path, str]:
             if duration and duration > settings.max_media_duration_seconds:
                 raise AppError(413, f"Media is {duration / 60:.0f} min long; the limit is "
                                     f"{settings.max_media_duration_minutes} min.")
+            validate_public_url(info.get("webpage_url") or info.get("url") or url)
             ydl.extract_info(url, download=True)
     except DownloadError as exc:
         raise AppError(400, f"Could not download that URL: {str(exc)[:200]}") from exc

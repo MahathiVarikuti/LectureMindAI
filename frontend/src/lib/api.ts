@@ -57,13 +57,16 @@ export function errorMessage(error: unknown, fallback: string): string {
   return err.message === "Network Error" ? "Cannot reach the server. Is the backend running?" : fallback;
 }
 
-const session = () => ({ session_id: getSessionId() });
+api.interceptors.request.use((config) => {
+  config.headers.set("X-Session-ID", getSessionId());
+  return config;
+});
 
 export const listDocuments = () =>
-  api.get<DocumentInfo[]>("/documents", { params: session() }).then((r) => r.data);
+  api.get<DocumentInfo[]>("/documents").then((r) => r.data);
 
 export const deleteDocument = (id: string) =>
-  api.delete(`/documents/${id}`, { params: session() });
+  api.delete(`/documents/${id}`);
 
 export const uploadFile = (file: File) => {
   const form = new FormData();
@@ -82,6 +85,6 @@ export const askQuestion = (query: string, selectedDocuments: string[]) =>
     { timeout: 180000 }).then((r) => r.data);
 
 export const getHistory = () =>
-  api.get<{ messages: StoredMessage[] }>("/history", { params: session() }).then((r) => r.data.messages);
+  api.get<{ messages: StoredMessage[] }>("/history").then((r) => r.data.messages);
 
-export const clearHistory = () => api.delete("/history", { params: session() });
+export const clearHistory = () => api.delete("/history");

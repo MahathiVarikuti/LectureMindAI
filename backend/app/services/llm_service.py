@@ -108,8 +108,10 @@ def generate_answer(query, chunks, model=None, frames=None):
 
 
 def is_not_found(answer):
-    normalized = answer.lower()
-    return "could not find that information" in normalized or "not found in the uploaded" in normalized
+    normalized = re.sub(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]", "", answer)
+    normalized = re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE).casefold()
+    expected = re.sub(r"[\W_]+", "", config.NOT_FOUND_ANSWER, flags=re.UNICODE).casefold()
+    return normalized == expected
 
 
 def needs_rewrite(chat_history, query):

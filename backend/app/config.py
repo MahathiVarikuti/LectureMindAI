@@ -16,7 +16,9 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    model_config = SettingsConfigDict(
+        env_file=BACKEND_DIR / ".env", extra="ignore", populate_by_name=True
+    )
 
     # --- Models -------------------------------------------------------------
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -30,6 +32,7 @@ class Settings(BaseSettings):
     # --- Ollama -------------------------------------------------------------
     ollama_url: str = "http://localhost:11434"
     llm_model: str = "qwen2.5:1.5b"
+    allowed_models: str = ""
     llm_num_ctx: int = 8192
     llm_temperature: float = 0.0
     ollama_timeout: int = 120  # seconds; a hung Ollama must not hang the API
@@ -93,6 +96,12 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
+    def allowed_model_list(self) -> list[str]:
+        return [model.strip() for model in self.allowed_models.split(",") if model.strip()] or [
+            self.llm_model
+        ]
+
+    @property
     def max_pdf_size_bytes(self) -> int:
         return self.max_pdf_size_mb * 1024 * 1024
 
@@ -118,6 +127,7 @@ RERANKER_MODEL = settings.reranker_model
 NLI_MODEL = settings.nli_model
 OLLAMA_URL = settings.ollama_url
 LLM_MODEL = settings.llm_model
+ALLOWED_MODELS = settings.allowed_model_list
 LLM_NUM_CTX = settings.llm_num_ctx
 LLM_TEMPERATURE = settings.llm_temperature
 CHUNK_SIZE = settings.chunk_size

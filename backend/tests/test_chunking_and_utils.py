@@ -2,7 +2,7 @@ import pytest
 
 from app.dependencies import validate_session_id
 from app.errors import AppError
-from app.utils.chunker import chunk_segments, chunk_text
+from app.utils.chunker import chunk_pages, chunk_segments, chunk_text
 from app.utils.media import detect_modality, safe_filename
 
 
@@ -16,6 +16,14 @@ class TestChunking:
 
     def test_empty_text(self):
         assert chunk_text("   ") == []
+
+    def test_pdf_heading_carries_across_pages(self):
+        chunks = chunk_pages([
+            {"page": 1, "text": "Gradient descent\nThe optimiser updates weights."},
+            {"page": 2, "text": "It moves opposite the gradient direction."},
+        ], min_chars=1)
+        assert chunks[0]["text"].startswith("Gradient descent\n")
+        assert chunks[1]["text"].startswith("Gradient descent\n")
 
     def test_segments_keep_timestamps_and_overlap(self):
         segs = [{"text": f"sentence number {i} here.", "start": float(i * 5), "end": float(i * 5 + 4)}

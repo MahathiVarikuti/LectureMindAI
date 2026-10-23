@@ -22,6 +22,9 @@ logger = logging.getLogger("lecturemind")
 async def lifespan(_app: FastAPI):
     sqlite.init_db()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    from app.services.ingestion import reconcile_orphans
+
+    reconcile_orphans()
     yield
 
 

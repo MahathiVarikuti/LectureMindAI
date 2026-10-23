@@ -68,7 +68,7 @@ def answer_question(
         "answer": config.NOT_FOUND_ANSWER,
         "abstained": True,
         "abstain_reason": abstain_reason,
-        "top_score": round(float(candidates[0]["score"]), 4) if candidates else 0.0,
+        "top_score": round(max(float(c["score"]) for c in candidates), 4) if candidates else 0.0,
         "sources": [_source(c) for c in chunks] + [_source(f) for f in frames],
         "context": "",
         "grounding": None,

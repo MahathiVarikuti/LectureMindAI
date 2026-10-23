@@ -146,8 +146,12 @@ class Retriever:
         fused = {}
         for ranked in (dense, sparse):
             for rank, hit in enumerate(ranked):
-                entry = fused.setdefault(hit["id"], {**hit, "rrf": 0.0})
+                entry = fused.setdefault(
+                    hit["id"], {**hit, "rrf": 0.0, "sparse_only": ranked is sparse}
+                )
                 entry.update({k: v for k, v in hit.items() if k.endswith("_score")})
+                if ranked is dense:
+                    entry["sparse_only"] = False
                 entry["rrf"] += 1.0 / (config.RRF_K + rank + 1)
 
         candidates = sorted(fused.values(), key=lambda h: h["rrf"], reverse=True)
@@ -177,8 +181,14 @@ def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None)
     relative_cutoff = config.RELATIVE_SCORE_CUTOFF if relative_cutoff is None else relative_cutoff
     if not candidates:
         return [], "no_documents"
-    best = max(c["score"] for c in candidates)
+    eligible = [c for c in candidates if not c.get("sparse_only")]
+    if not eligible:
+        return [], "low_relevance"
+    best = max(c["score"] for c in eligible)
     if best < threshold:
         return [], "low_relevance"
-    kept = [c for c in candidates[:top_k] if c["score"] >= max(threshold, best * relative_cutoff)]
+    kept = [
+        c for c in candidates[:top_k]
+        if not c.get("sparse_only") and c["score"] >= max(threshold, best * relative_cutoff)
+    ]
     return kept, None

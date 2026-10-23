@@ -6,7 +6,7 @@ class QueryRequest(BaseModel):
     query: str = Field(max_length=2000)
     session_id: str
     selected_documents: list[str] | None = None
-    model: str | None = None  # optionally override the Ollama model, e.g. "qwen2.5:7b"
+    model: str | None = None  # optionally override an allowlisted Ollama model
 
 
 class UploadUrlRequest(BaseModel):

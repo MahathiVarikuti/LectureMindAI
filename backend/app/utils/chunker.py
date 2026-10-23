@@ -71,6 +71,31 @@ def chunk_text(text, chunk_size=None, overlap=None, min_chars=None):
     return [c for c in chunks if len(c) >= min_chars]
 
 
+def _looks_like_heading(line: str) -> bool:
+    words = line.split()
+    return bool(words) and len(words) <= 12 and len(line) <= 120 and (
+        line.isupper() or not line.endswith((".", "?", "!", ";", ":"))
+    )
+
+
+def chunk_pages(pages, chunk_size=None, overlap=None, min_chars=None):
+    """Chunk PDF pages while carrying the latest section heading across page breaks."""
+    heading = None
+    chunks = []
+    for page in pages:
+        lines = [line.strip() for line in clean_text(page.get("text", "")).splitlines() if line.strip()]
+        page_heading = next((line for line in lines if _looks_like_heading(line)), None)
+        if page_heading:
+            heading = page_heading
+            lines = lines[lines.index(page_heading) + 1:]
+        page_chunks = chunk_text("\n".join(lines), chunk_size, overlap, min_chars)
+        for text in page_chunks:
+            if heading and not text.startswith(f"{heading}\n"):
+                text = f"{heading}\n{text}"
+            chunks.append({"text": text, "page": page["page"]})
+    return chunks
+
+
 def chunk_text_fixed(text, chunk_size=1000, overlap=200):
     """The original V1 character-window chunker, kept for evaluation baselines."""
     chunks = []

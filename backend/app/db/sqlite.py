@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS documents (
     uploaded_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_documents_session ON documents(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_session_file_hash
+    ON documents(session_id, file_hash) WHERE file_hash IS NOT NULL;
 """
 
 
@@ -45,6 +47,17 @@ def init_db() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         conn.executescript(_SCHEMA)
+
+
+def document_ids(session_id: str | None = None) -> set[str]:
+    with connect() as conn:
+        if session_id:
+            rows = conn.execute(
+                "SELECT document_id FROM documents WHERE session_id = ?", (session_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT document_id FROM documents").fetchall()
+    return {row[0] for row in rows}
 
 
 @contextmanager

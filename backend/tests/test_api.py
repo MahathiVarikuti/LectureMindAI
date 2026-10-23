@@ -10,6 +10,7 @@ import requests
 from app.config import settings
 from app.db import sqlite
 from app.db.chroma import image_collection, text_collection
+from app.errors import AppError
 from tests.conftest import make_pdf, upload_pdf
 
 
@@ -33,6 +34,11 @@ class TestBasics:
         r = upload_pdf(client, "123e4567-e89b-12d3-a456-426614174000", pdf_bytes)
         assert r.status_code == 400 and "UUID v4" in r.json()["detail"]
         assert client.get("/documents", params={"session_id": "nope"}).status_code == 400
+
+    def test_session_header_wins_and_query_param_remains_supported(self, client, session_a, session_b):
+        assert client.get("/documents", params={"session_id": session_a},
+                          headers={"X-Session-ID": session_b}).status_code == 200
+        assert client.get("/documents", headers={"X-Session-ID": session_a}).status_code == 200
 
 
 class TestUploadValidation:
@@ -66,6 +72,28 @@ class TestUploadValidation:
         second = upload_pdf(client, session_a, pdf_bytes).json()
         assert second["duplicate"] and second["document_id"] == first["document_id"]
         assert len(client.get("/documents", params={"session_id": session_a}).json()) == 1
+
+    def test_concurrent_duplicate_uploads_are_unique(self, client, session_a, pdf_bytes, monkeypatch):
+        import concurrent.futures
+        original = __import__("app.services.ingestion", fromlist=["ingest_pdf"]).ingest_pdf
+
+        def delayed(*args, **kwargs):
+            import time
+            time.sleep(0.05)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr("app.routes.upload.ingestion.ingest_pdf", delayed)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(
+                lambda _: upload_pdf(client, session_a, pdf_bytes), range(2)
+            ))
+        assert all(response.status_code == 200 for response in responses)
+        assert len(client.get("/documents", params={"session_id": session_a}).json()) == 1
+
+    def test_disallowed_model_is_rejected(self, client, session_a, monkeypatch):
+        monkeypatch.setattr("app.config.ALLOWED_MODELS", ["qwen2.5:1.5b"])
+        response = query(client, session_a, "hello", model="untrusted-model")
+        assert response.status_code == 400
 
     def test_audio_duration_checked_before_transcription(self, client, session_a, monkeypatch):
         called = []
@@ -186,6 +214,45 @@ class TestAudioVideoUrl:
         assert r.status_code == 200 and r.json()["modality"] == "audio"
         assert made and not made[0].exists()  # temp dir removed
 
+    def test_url_download_revalidates_redirect_target(self, monkeypatch, tmp_path):
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download):
+                if not download:
+                    return {"webpage_url": "http://127.0.0.1/private", "duration": 1, "title": "x"}
+                return {}
+
+        class FakeDlp:
+            YoutubeDL = FakeYoutubeDL
+
+        import sys
+        import types
+        monkeypatch.setitem(sys.modules, "yt_dlp", FakeDlp)
+        monkeypatch.setitem(
+            sys.modules, "yt_dlp.utils", types.SimpleNamespace(DownloadError=Exception)
+        )
+        checked = []
+
+        def check(url):
+            checked.append(url)
+            if "127.0.0.1" in url:
+                raise AppError(400, "private")
+
+        monkeypatch.setattr("app.services.url_ingestion.validate_public_url", check)
+        from app.services.url_ingestion import _download
+
+        with pytest.raises(AppError):
+            _download("https://example.com/video", tmp_path, want_video=False)
+        assert checked[-1] == "http://127.0.0.1/private"
+
     @pytest.mark.parametrize("url", ["http://127.0.0.1/secret", "http://localhost:8000/x", "ftp://example.com/a"])
     def test_url_rejects_local_and_non_http(self, client, session_a, url):
         r = client.post("/upload-url", json={"url": url, "session_id": session_a})
@@ -218,6 +285,11 @@ class TestSessionIsolation:
         assert len(client.get("/history", params={"session_id": session_a}).json()["messages"]) == 2
         assert client.get("/history", params={"session_id": session_b}).json()["messages"] == []
 
+    def test_history_header_wins(self, client, session_a, session_b):
+        response = client.get("/history", params={"session_id": session_a},
+                              headers={"X-Session-ID": session_b})
+        assert response.status_code == 200 and response.json()["messages"] == []
+
 
 class TestDeletion:
     def test_delete_removes_vectors_file_and_row(self, client, session_a, pdf_bytes):
@@ -232,6 +304,18 @@ class TestDeletion:
         assert text_collection().get(where={"document_id": doc_id})["ids"] == []
         assert image_collection().get(where={"document_id": doc_id})["ids"] == []
         assert client.get("/documents", params={"session_id": session_a}).json() == []
+
+    def test_reconcile_orphans_removes_vectors_without_sqlite_rows(self, session_a):
+        from app.services.ingestion import reconcile_orphans
+
+        text_collection().add(
+            ids=["orphan-text"],
+            documents=["orphan"],
+            embeddings=[[0.0] * 384],
+            metadatas=[{"session_id": session_a, "document_id": "missing"}],
+        )
+        reconcile_orphans(session_a)
+        assert text_collection().get(ids=["orphan-text"])["ids"] == []
 
 
 class TestEmptyContextGuard:
