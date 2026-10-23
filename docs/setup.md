@@ -13,5 +13,20 @@
 - *Machine slows down*: keep `USE_RERANKER=0` and `USE_GROUNDING_CHECK=0`, use `WHISPER_MODEL=tiny`, close other heavy apps, and upload short clips first.
 - *CORS error in the browser*: add the frontend origin to `CORS_ORIGINS`.
 
+## Media verification (October 2026)
+
+On the verification machine, ffmpeg 9.0.2 was already installed and on `PATH`.
+Generated 20-second WAV and MP4 fixtures passed `ffprobe` duration checks; MP4 audio
+extraction and three sampled frames also completed successfully. The public Blender
+Foundation Big Buck Bunny URL
+`https://www.youtube.com/watch?v=aqz-KE-bpKQ` downloaded successfully through yt-dlp.
+
+The real `WHISPER_MODEL=tiny` transcription path is currently blocked on Python 3.14
+by the installed dependency combination `faster-whisper 1.2.1` and `av 19.0.2`:
+PyAV raises `TypeError: open() got an unexpected keyword argument 'metadata_errors'`.
+No compatibility shim was added. Use Python 3.11 (the CI version) for real
+faster-whisper verification until a compatible faster-whisper/PyAV release is
+available for Python 3.14. The mocked test suite remains model- and network-free.
+
 ## Tests
 `cd backend && pip install -r requirements-dev.txt && pytest` (no model downloads needed).
