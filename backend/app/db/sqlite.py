@@ -6,6 +6,7 @@ random UUID v4 held in the browser: lightweight isolation, NOT authentication
 (see docs/security.md).
 """
 import sqlite3
+import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -47,6 +48,9 @@ def init_db() -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect() as conn:
         conn.executescript(_SCHEMA)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
+        if "sources_json" not in columns:
+            conn.execute("ALTER TABLE messages ADD COLUMN sources_json TEXT")
 
 
 def document_ids(session_id: str | None = None) -> set[str]:
@@ -76,11 +80,12 @@ def connect():
 
 
 # --- chat messages ----------------------------------------------------------
-def add_message(session_id: str, role: str, content: str) -> None:
+def add_message(session_id: str, role: str, content: str, sources: list[dict] | None = None) -> None:
     with connect() as conn:
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (session_id, role, content, now_iso()),
+            "INSERT INTO messages (session_id, role, content, sources_json, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (session_id, role, content, json.dumps(sources) if sources is not None else None, now_iso()),
         )
         # Keep the table bounded: drop the oldest rows beyond the per-session cap.
         conn.execute(
@@ -95,16 +100,25 @@ def get_messages(session_id: str, limit: int | None = None) -> list[dict]:
     with connect() as conn:
         if limit:
             rows = conn.execute(
-                "SELECT role, content, created_at FROM messages WHERE session_id = ? "
+                "SELECT role, content, sources_json, created_at FROM messages WHERE session_id = ? "
                 "ORDER BY id DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()[::-1]
         else:
             rows = conn.execute(
-                "SELECT role, content, created_at FROM messages WHERE session_id = ? ORDER BY id",
+                "SELECT role, content, sources_json, created_at FROM messages WHERE session_id = ? ORDER BY id",
                 (session_id,),
             ).fetchall()
-    return [dict(r) for r in rows]
+    messages = []
+    for row in rows:
+        message = dict(row)
+        if message.get("sources_json"):
+            message["sources"] = json.loads(message["sources_json"])
+        else:
+            message["sources"] = None
+        del message["sources_json"]
+        messages.append(message)
+    return messages
 
 
 def clear_messages(session_id: str) -> None:

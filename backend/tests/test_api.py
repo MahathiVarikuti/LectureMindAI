@@ -343,7 +343,9 @@ class TestLlmPlumbing:
     def test_history_persists_in_sqlite_and_can_be_cleared(self, client, session_a, pdf_bytes, llm):
         upload_pdf(client, session_a, pdf_bytes)
         query(client, session_a, "What is gradient descent?")
-        assert [m["role"] for m in sqlite.get_messages(session_a)] == ["user", "assistant"]
+        messages = sqlite.get_messages(session_a)
+        assert [m["role"] for m in messages] == ["user", "assistant"]
+        assert messages[1]["sources"]
         client.delete("/history", params={"session_id": session_a})
         assert sqlite.get_messages(session_a) == []
 

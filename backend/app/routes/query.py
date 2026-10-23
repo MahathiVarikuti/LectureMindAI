@@ -48,8 +48,8 @@ async def query_rag(request: Request, body: QueryRequest):
     except requests.RequestException as exc:
         raise AppError(503, "The language model (Ollama) is unavailable. Is it running?") from exc
 
-    append_turn(session_id, body.query, result["answer"])
     sources = result["sources"]
+    append_turn(session_id, body.query, result["answer"], sources=sources)
     return {
         **result,
         "used_documents": sorted({s["filename"] for s in sources if s["filename"]}),

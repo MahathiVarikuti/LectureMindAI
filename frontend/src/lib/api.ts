@@ -45,6 +45,7 @@ export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  sources?: Source[] | null;
 }
 
 /** Turn an axios/FastAPI error into a message safe to show the user. */

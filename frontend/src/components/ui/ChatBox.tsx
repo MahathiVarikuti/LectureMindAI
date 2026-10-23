@@ -24,6 +24,7 @@ export default function ChatBox() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const selectedNames = useMemo(
@@ -45,7 +46,9 @@ export default function ChatBox() {
   useEffect(() => {
     void refreshDocuments();
     getHistory()
-      .then((stored) => setMessages(stored.map((m) => ({ role: m.role, content: m.content }))))
+      .then((stored) => setMessages(stored.map((m) => ({
+        role: m.role, content: m.content, sources: m.sources ?? undefined,
+      }))))
       .catch((error) => console.error("Error loading history:", error));
   }, [refreshDocuments]);
 
@@ -62,7 +65,7 @@ export default function ChatBox() {
       await deleteDocument(doc.document_id);
       await refreshDocuments();
     } catch (error) {
-      alert(errorMessage(error, "Could not delete the document."));
+      setError(errorMessage(error, "Could not delete the document."));
     }
   };
 
@@ -80,6 +83,7 @@ export default function ChatBox() {
         { role: "assistant", content: response.answer, sources: response.sources, abstained: response.abstained },
       ]);
     } catch (error) {
+      setError(errorMessage(error, "Failed to get an answer."));
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: errorMessage(error, "Failed to get an answer."), error: true },
@@ -97,6 +101,7 @@ export default function ChatBox() {
 
   return (
     <div className="workspace">
+      {error && <div className="upload-status error" role="alert">{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
       <aside className="workspace-sidebar">
         <div className="brand-mark"><span>LM</span><div><strong>LectureMind</strong><small>your study companion</small></div></div>
         <div className="sidebar-section">

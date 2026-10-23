@@ -16,9 +16,9 @@ def get_full_history(session_id):
     return sqlite.get_messages(session_id)
 
 
-def append_turn(session_id, question, answer):
+def append_turn(session_id, question, answer, sources=None):
     sqlite.add_message(session_id, "user", question)
-    sqlite.add_message(session_id, "assistant", answer)
+    sqlite.add_message(session_id, "assistant", answer, sources=sources)
 
 
 def clear_session(session_id):
