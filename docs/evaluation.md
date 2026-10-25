@@ -153,12 +153,20 @@ All training runs on a 12-core laptop CPU with ~2.6 GB free RAM; trained weights
 | original NLI model | 0.651 | 0.741 | 0.36 (groundedness 0.35) |
 | fine-tuned | 0.742 | 0.785 | 0.52 (min-support 0.45) |
 
-Caveats: best-F1 thresholds were selected on the same RAGTruth sample, so treat them as optimistic, and the
-run is a single n=300 sample. The fine-tuned model on RAGBench test (n=300, 91 hallucinated, same source as training) gives
-AUROC 0.603 (groundedness) / 0.665 (min-support), best F1 0.52 at min-support 0.85. At the current
-`GROUNDEDNESS_THRESHOLD=0.6` the fine-tuned model has precision 0.39 and recall 0.25 on RAGTruth, so the
-threshold must be re-tuned before enabling it. Keep the flag as a UI warning, not a hard refusal.
-To use it: `NLI_MODEL=backend/models/nli-deberta-lecturemind`.
+**Same comparison on RAGBench test (n=300, 91 hallucinated; same source as the training data):**
+
+| | AUROC groundedness | AUROC min-support | best F1 | F1 at current threshold 0.6 |
+|---|---|---|---|---|
+| original NLI model | 0.607 | 0.652 | 0.51 | 0.48 |
+| fine-tuned | 0.603 | 0.665 | 0.52 | 0.24 |
+
+**Verdict: mixed.** The fine-tuned checker helps on RAGTruth (AUROC +0.09 groundedness, +0.04 min-support, best F1 0.36 to 0.52)
+but gives **no gain on RAGBench test**, even though it trained on RAGBench train, and at the current threshold 0.6 it is
+worse on both sets (it needs a much higher or different threshold). Best-F1 thresholds were chosen on the evaluated sample itself,
+and each run is a single n=300 sample, so differences of a few points are noise. It is therefore **not made the default**.
+Likely causes: only 2,000 pairs for 2 epochs, premises picked by lexical overlap, and response-level labels
+that are noisy. Next steps: more data and epochs on a GPU, pick the threshold on one dataset and test on another, and try
+MiniCheck or HHEM. Keep the flag as a UI warning, not a hard refusal. To try it: `NLI_MODEL=backend/models/nli-deberta-lecturemind`.
 
 Datasets reviewed and rejected: the Civitai multimodal-RAG set (AI-generated image prompts, no questions or labels).
 Lecture-specific candidates not yet used: LPM (slides + speech), LecSlides-370K, MMLongBench-Doc, SPIQA, HaluBench, LLM-AggreFact.

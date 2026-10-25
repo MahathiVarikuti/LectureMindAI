@@ -92,7 +92,7 @@ python -m eval.finetune_embedder  --pairs 3000 --epochs 2   # embedder, QASPER t
 python -m eval.finetune_reranker  --pairs 3000 --epochs 2   # reranker, QASPER train
 python -m eval.run hallucination --source ragtruth --nli-model models/nli-deberta-lecturemind
 ```
-The fine-tuned grounding checker raises hallucination-detection AUROC on held-out RAGTruth from 0.65 to 0.74 (best F1 0.36 to 0.52). Embedder and reranker fine-tunes are still to be evaluated.
+The fine-tuned grounding checker raises hallucination-detection AUROC on held-out RAGTruth from 0.65 to 0.74 (best F1 0.36 to 0.52) but shows no gain on RAGBench test, so it is not the default (details in `docs/evaluation.md`). Embedder and reranker fine-tunes are still to be evaluated.
 
 ## Known limitations
 - Audio, video and URL ingestion are implemented and tested with fakes; the PDF path is the one exercised end to end with real models.

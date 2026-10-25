@@ -26,9 +26,9 @@
 ## Evaluation and model tuning
 - [x] 23. Evaluation harness (retrieval, thresholds, generation, hallucination, conversation)
 - [x] 24. Real-data runs on QASPER, SQuAD v2, CoQA, RAGTruth, RAGBench
-- [x] 25. Fine-tune NLI grounding checker on RAGBench train (AUROC 0.65 -> 0.74 on RAGTruth)
+- [x] 25. Fine-tune NLI grounding checker on RAGBench train (RAGTruth AUROC 0.65 -> 0.74; no gain on RAGBench test, so not the default)
 - [x] 26. Hard-negative embedder fine-tuning script
 - [ ] 27. Run reranker and embedder fine-tunes, re-evaluate retrieval and re-calibrate thresholds
-- [ ] 28. Re-tune GROUNDEDNESS_THRESHOLD for the fine-tuned checker, then make it the default
+- [ ] 28. Improve the grounding checker (more data/epochs, MiniCheck or HHEM), re-tune GROUNDEDNESS_THRESHOLD
 - [ ] 29. Hand-label 30-50 questions on real lecture PDFs (in-domain metric)
 - [ ] 30. Larger-n runs (n>=500) with confidence intervals; compare qwen2.5:7b / llama3.1:8b
