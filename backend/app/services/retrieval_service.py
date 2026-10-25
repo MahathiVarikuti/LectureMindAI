@@ -165,14 +165,21 @@ class Retriever:
             candidates.sort(key=lambda c: c["score"], reverse=True)
         else:
             for c in candidates:
-                c["score"] = c.get("dense_score", 0.0)
+                # keyword-only (BM25) hits have no cosine score; give them a neutral one
+                c["score"] = c.get("dense_score", config.DENSE_RELEVANCE_THRESHOLD)
             if not self.use_hybrid:
                 candidates.sort(key=lambda c: c["score"], reverse=True)
         return candidates[:top_k]
 
 
-def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None):
-    """Apply the relevance threshold. Returns (kept_chunks, abstain_reason)."""
+def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None, per_chunk_threshold=True):
+    """Apply the relevance threshold. Returns (kept_chunks, abstain_reason).
+
+    The threshold always gates the *best* chunk (abstain if even that is irrelevant).
+    `per_chunk_threshold` additionally drops every chunk below the threshold: right for
+    reranker probabilities (calibrated), wrong for raw cosine scores, where the right
+    chunk for "what are her projects?" often scores only 0.15-0.3 and was being thrown away.
+    """
     top_k = top_k or config.TOP_K
     if threshold is None:
         threshold = config.RELEVANCE_THRESHOLD
@@ -187,8 +194,6 @@ def select_context(candidates, top_k=None, threshold=None, relative_cutoff=None)
     best = max(c["score"] for c in eligible)
     if best < threshold:
         return [], "low_relevance"
-    kept = [
-        c for c in candidates[:top_k]
-        if not c.get("sparse_only") and c["score"] >= max(threshold, best * relative_cutoff)
-    ]
+    floor = max(threshold, best * relative_cutoff) if per_chunk_threshold else best * relative_cutoff
+    kept = [c for c in candidates[:top_k] if not c.get("sparse_only") and c["score"] >= floor]
     return kept, None

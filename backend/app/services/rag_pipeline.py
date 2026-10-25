@@ -56,7 +56,10 @@ def answer_question(
     candidates = retriever.retrieve(search_query, document_ids=document_ids, session_id=session_id)
     if relevance_threshold is None:
         relevance_threshold = getattr(retriever, "relevance_threshold", None)
-    chunks, abstain_reason = select_context(candidates, threshold=relevance_threshold)
+    chunks, abstain_reason = select_context(
+        candidates, threshold=relevance_threshold,
+        per_chunk_threshold=getattr(retriever, "use_reranker", True),
+    )
     # Visual matches come from the separate image collection (session-scoped; skipped
     # entirely when the session has no video frames).
     frames = retrieve_frames(search_query, session_id, document_ids) if session_id else []

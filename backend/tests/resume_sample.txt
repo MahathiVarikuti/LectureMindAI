@@ -1,0 +1,58 @@
+VARIKUTI MAHATHI REDDY 
++91 77299 07619   |   mahathivarikuti@gmail.com   |   github.com/MahathiVarikuti   |   linkedin.com/in/mahathi-reddy-varikuti      
+Final-year Computer Science (Data Science) undergraduate with a strong foundation in software engineering and data engineering — 
+building scalable backend systems, REST APIs, and automated data pipelines with Python, Java, SQL, PostgreSQL, and Docker. Comfortable 
+owning a project end-to-end, from implementation through deployment, with hands-on experience across real-time data processing and 
+database design. Focused on writing clean, maintainable code and collaborating well within engineering teams, with a strong grounding in 
+data structures and algorithms. 
+EDUCATION 
+Manipal Institute of Technology, Bengaluru 
+BTech, Computer Science & Engineering (Data Science), Minor in AI/ML  |  CGPA: 8.71 / 10 
+EXPERIENCE  
+Jul 2023 – Jul 2027 
+Technical Intern, Signature IT World 
+May 2025 – Jun 2025 
+● Automated Python-based data pipelines to ingest, transform, and validate transactional datasets, working with structured and 
+unstructured data to improve data readiness for downstream analytics and reporting. 
+● Maintained REST APIs supporting internal data exchange, collaborating across teams to debug backend services, improve code quality, 
+and document technical workflows clearly.  
+● Worked across the data pipeline lifecycle - ingestion, cleaning, and validation, using Python, SQL, and Pandas. 
+PROJECTS 
+Data Quality Intelligence Platform 
+React · JavaScript · Django REST Framework · Python · PostgreSQL · Pandas · REST APIs 
+● Built a full-stack data quality platform to ingest, profile, and validate structured CSV datasets, running 6+ automated checks across 25 
+datasets (up to 50,000 rows each) and catching 104 anomalies across 264,000+ data points before downstream processing. 
+● Structured a modular rule architecture that lets new validation checks be added without touching unrelated components, cutting 
+manual validation time from hours to seconds. 
+FaceFindr – Face Recognition Web Platform 
+Flask · Python · PostgreSQL · SQLAlchemy · OpenCV · REST APIs 
+● Architected a full-stack Flask application with role-based access control and session-based authentication over 6 ORM-modeled 
+PostgreSQL tables, covering registration, file uploads, event galleries, and admin dashboards. 
+● Implemented a centroid-based face-matching pipeline using 128-dimension embeddings, achieving 83–93% detection confidence, with 
+ML logic isolated in a reusable utils layer decoupled from routing and data-access code. 
+LectureMind AI – Multimodal RAG Learning Platform 
+Python · FastAPI · Next.js · TypeScript · Vector Search · Docker 
+● Engineered a full-stack RAG platform for natural-language Q&A over lecture PDFs, audio, and video, pairing a Next.js/TypeScript 
+frontend with a FastAPI backend handling streaming responses across 4 content types; tested with ~12 users including faculty. 
+● Designed a citation-aware retrieval pipeline over a FAISS/ChromaDB vector store using Whisper transcription and CLIP embeddings, 
+returning grounded, source-linked answers with clean service/API/view-layer separation. 
+TECHNICAL SKILLS 
+Languages: Python, Java, SQL, C 
+Core CS & Systems: Data Structures & Algorithms, OOP, DBMS, Operating Systems, Docker, Git, GitHub, Linux 
+Backend & APIs: FastAPI, Django, Django REST Framework, Flask, REST APIs, Session & Auth Handling 
+Frontend: React, Next.js, Tailwind CSS, HTML5, CSS3, JavaScript 
+Data Engineering & Databases: PostgreSQL, MySQL, SQLite, SQLAlchemy ORM, SQL, JSON Data Manipulation, Data Cleaning & 
+Transformation, Data Validation & Quality Checks, Unstructured Data Processing 
+Data Analysis & Visualization: Exploratory Data Analysis (EDA), Descriptive Statistics, Probability & Statistical Analysis, Power BI, Tableau, 
+Streamlit 
+Machine Learning & AI: Scikit-learn, SVM, Decision Trees, Ensemble Methods, Clustering (K-Means), PCA, Model Evaluation, Feature 
+Engineering, Computer Vision (OpenCV), Retrieval-Augmented Generation (RAG), Vector Search (FAISS, ChromaDB) 
+CERTIFICATIONS 
+Machine Learning with Python (IBM)  
+Data Analytics Job Simulation (Deloitte Forage) 
+Python for Data Science, AI & Development (IBM)   
+Web Development (IBM) 
+LEADERSHIP & ACTIVITIES 
+Marketing Head, Innovesta – Finance & Entrepreneurship Club, MIT-B (2024–25) 
+Marketing Head, Tech Solstice, MIT-B (2025) 
+Marketing Vice Head, Falak, MIT-B (2024) 

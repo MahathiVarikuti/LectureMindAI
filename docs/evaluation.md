@@ -112,7 +112,7 @@ The shipped default is therefore `all-MiniLM-L6-v2`, dense-only, cosine threshol
 The evaluation harness measured the reranked, hybrid, BGE configuration. The application defaults follow the project spec instead
 (`all-MiniLM-L6-v2`, dense retrieval only) because it is the lightest on RAM. To reproduce the measured quality in the app, set
 `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 USE_HYBRID=1 USE_RERANKER=1` (and optionally `USE_GROUNDING_CHECK=1`); the relevance threshold then
-defaults to 0.125 (reranker scale). With the default MiniLM dense mode the threshold is 0.25 cosine: calibrate it with `python -m eval.run threshold`.
+defaults to 0.125 (reranker scale). With the default MiniLM dense mode the threshold is 0.15 cosine: calibrate it with `python -m eval.run threshold`.
 Re-upload documents after changing the embedding model.
 
 ## 6. Multi-hop and multi-turn coverage

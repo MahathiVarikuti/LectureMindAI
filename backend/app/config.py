@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     use_reranker: bool = False
     use_grounding_check: bool = False
     # Minimum score of the best chunk, otherwise we answer "not found" without calling the LLM.
-    # Unset -> 0.125 when the reranker is on (reranker probability), else 0.25 (cosine, MiniLM).
+    # Unset -> 0.125 when the reranker is on (reranker probability), else 0.15 (cosine, MiniLM).
     relevance_threshold: float | None = None
     relative_score_cutoff: float = 0.05
     image_min_score: float = 0.2  # raw CLIP text-image cosine; typical matches are 0.2-0.35
@@ -145,7 +145,7 @@ RELATIVE_SCORE_CUTOFF = settings.relative_score_cutoff
 SUPPORT_THRESHOLD = settings.support_threshold
 GROUNDEDNESS_THRESHOLD = settings.groundedness_threshold
 RERANKER_RELEVANCE_THRESHOLD = 0.125  # calibrated on SQuAD v2, see docs/evaluation.md
-DENSE_RELEVANCE_THRESHOLD = 0.30  # calibrated combined-negative sweep; preserves >=0.9 answer rate
+DENSE_RELEVANCE_THRESHOLD = 0.15  # cosine similarity for the default MiniLM embeddings (typical unrelated pairs score < 0.1)
 MAX_HISTORY_MESSAGES = settings.max_history_messages
 
 NOT_FOUND_ANSWER = "I could not find that information in the uploaded material."

@@ -37,21 +37,10 @@ def _split(text, chunk_size, separators):
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
-def chunk_text(text, chunk_size=None, overlap=None, min_chars=None):
-    """Structure-aware chunking: packs paragraphs/sentences into chunks of at most
-    chunk_size characters, carrying roughly `overlap` characters of trailing
-    sentences into the next chunk. Never cuts in the middle of a word."""
-    chunk_size = chunk_size or config.CHUNK_SIZE
-    overlap = config.CHUNK_OVERLAP if overlap is None else overlap
-    min_chars = config.MIN_CHUNK_CHARS if min_chars is None else min_chars
-
-    text = clean_text(text)
-    if not text:
-        return []
-
-    pieces = _split(text, chunk_size, _SEPARATORS)
-    chunks, current = [], []
-    current_len = 0
+def _pack(pieces, chunk_size, overlap):
+    """Greedily pack pieces into chunks <= chunk_size, carrying ~`overlap` chars of trailing
+    pieces into the next chunk."""
+    chunks, current, current_len = [], [], 0
     for piece in pieces:
         if current and current_len + len(piece) > chunk_size:
             chunks.append("".join(current).strip())
@@ -67,7 +56,92 @@ def chunk_text(text, chunk_size=None, overlap=None, min_chars=None):
         current_len += len(piece)
     if current:
         chunks.append("".join(current).strip())
+    return chunks
 
+
+_BULLET = ("●", "•", "▪", "-", "*", "–")
+
+
+def _is_heading(line):
+    """A short ALL-CAPS line such as EDUCATION or TECHNICAL SKILLS (not an acronym like SQL)."""
+    line = line.strip()
+    letters = [c for c in line if c.isalpha()]
+    return (len(letters) >= 4 and line.isupper() and len(line.split()) <= 6
+            and not line.endswith((".", ",", ";")) and not line.startswith(_BULLET))
+
+
+def _split_sections(text):
+    """[(heading|None, body)] split at heading lines. Documents without headings return
+    a single (None, text) section, which keeps the original chunking behaviour."""
+    sections, heading, body = [], None, []
+    for line in text.split("\n"):
+        if _is_heading(line):
+            if "\n".join(body).strip() or heading:
+                sections.append((heading, "\n".join(body).strip()))
+            heading, body = line.strip(), []
+        else:
+            body.append(line)
+    sections.append((heading, "\n".join(body).strip()))
+    return [(h, b) for h, b in sections if b]
+
+
+def _units(body):
+    """Split a section into logical entries so one entry is never cut in half: a title line
+    (plus its stack/date lines) stays with the bullets that follow it, and wrapped bullet
+    lines stay with their bullet."""
+    units, current, seen_bullet = [], [], False
+    for line in body.split("\n"):
+        is_bullet = line.lstrip().startswith(_BULLET)
+        if (not line.strip()) or (seen_bullet and not is_bullet and not line.startswith(" ")
+                                  and current and _starts_new_entry(current, line)):
+            if current:
+                units.append("\n".join(current))
+            current, seen_bullet = [], False
+            if not line.strip():
+                continue
+        current.append(line)
+        seen_bullet = seen_bullet or is_bullet
+    if current:
+        units.append("\n".join(current))
+    return units
+
+
+def _starts_new_entry(current, line):
+    # After bullets, a non-bullet line is a continuation of the last bullet when the bullet
+    # does not look finished (PDF line wrapping); otherwise it starts a new entry (a title).
+    last = current[-1].rstrip()
+    return last.endswith((".", ")", ":", "%")) and line[:1].isupper()
+
+
+def chunk_text(text, chunk_size=None, overlap=None, min_chars=None):
+    """Structure-aware chunking: packs paragraphs/sentences into chunks of at most
+    chunk_size characters, carrying roughly `overlap` characters of trailing
+    sentences into the next chunk. Never cuts in the middle of a word.
+
+    Documents with section headings (EDUCATION, PROJECTS, ... or lecture headings) are
+    split per section, entries inside a section (e.g. one project) stay together, and every
+    chunk is prefixed with its section heading so "what are her projects?" matches."""
+    chunk_size = chunk_size or config.CHUNK_SIZE
+    overlap = config.CHUNK_OVERLAP if overlap is None else overlap
+    min_chars = config.MIN_CHUNK_CHARS if min_chars is None else min_chars
+
+    text = clean_text(text)
+    if not text:
+        return []
+
+    sections = _split_sections(text)
+    if len(sections) == 1 and sections[0][0] is None:
+        chunks = _pack(_split(text, chunk_size, _SEPARATORS), chunk_size, overlap)
+        return [c for c in chunks if len(c) >= min_chars]
+
+    chunks = []
+    for heading, body in sections:
+        prefix = f"{heading}\n" if heading else ""
+        budget = max(200, chunk_size - len(prefix))
+        pieces = []
+        for unit in _units(body):
+            pieces.extend(_split(unit + "\n", budget, _SEPARATORS))
+        chunks.extend(prefix + c for c in _pack(pieces, budget, overlap) if c)
     return [c for c in chunks if len(c) >= min_chars]
 
 
