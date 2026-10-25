@@ -35,6 +35,7 @@ _client = chromadb.EphemeralClient()
 # name -> how the index is built and searched
 RETRIEVAL_CONFIGS = {
     "v1_baseline":   dict(chunker="fixed", embed="sentence-transformers/all-MiniLM-L6-v2", hybrid=False, rerank=False),
+    "shipped_minilm": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=False, rerank=False),
     "dense_bge":     dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=False, rerank=False),
     "hybrid_bge":    dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=False),
     "hybrid_rerank": dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=True),
@@ -144,7 +145,7 @@ def cmd_threshold(args):
     pos, neg, hard = pos[:args.n], neg[:args.n], hard[:args.n]
     print(f"{args.dataset}: {len(pos)} answerable vs {len(neg)} out-of-corpus vs {len(hard)} in-corpus unanswerable")
     report = {"dataset": args.dataset, "configs": {}}
-    for name in ("dense_bge", "hybrid_rerank"):
+    for name in args.configs:
         retriever = make_retriever(docs, RETRIEVAL_CONFIGS[name], args.dataset)
         top = lambda q: (retriever.retrieve(q["question"], top_k=1) or [{"score": 0.0}])[0]["score"]
         ps, ns, hs = [top(q) for q in pos], [top(q) for q in neg], [top(q) for q in hard]

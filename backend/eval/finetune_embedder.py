@@ -5,10 +5,9 @@
 
 Trains on QASPER *train* papers (evaluation uses the *validation* papers, so
 there is no leakage). Loss: MultipleNegativesRankingLoss with in-batch negatives
-from other questions' evidence. The mined same-paper negatives are retained for
-future hard-negative experiments but are not passed as a third sentence feature:
-the current sentence-transformers loss accepts anchor/positive pairs only.
-Runs on CPU in a few minutes for ~3k pairs.
+plus one mined same-paper hard negative per question:
+the loss takes (anchor, positive, hard negative) features.
+Runs on CPU in a few minutes for ~3k triples.
 """
 import argparse
 import os
@@ -88,7 +87,9 @@ def main():
             batch = triples[s:s + args.batch_size]
             q = features([prefix + b[0] for b in batch])
             pos = features([b[1] for b in batch])
-            loss = loss_fn([q, pos], labels=None)
+            neg = features([b[2] for b in batch])
+            # anchor, positive, hard negative: other positives in the batch act as extra negatives
+            loss = loss_fn([q, pos, neg], labels=None)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()

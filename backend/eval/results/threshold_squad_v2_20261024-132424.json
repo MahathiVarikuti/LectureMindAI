@@ -1,0 +1,782 @@
+{
+  "dataset": "squad_v2",
+  "configs": {
+    "shipped_minilm": {
+      "answerable_median": 0.5911240577697754,
+      "out_of_corpus": {
+        "auroc": 0.9513,
+        "best": {
+          "threshold": 0.475,
+          "answer_rate_in_scope": 0.81,
+          "abstain_rate_out_of_scope": 0.95,
+          "balanced_accuracy": 0.88
+        },
+        "sweep": [
+          {
+            "threshold": 0.0,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.025,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.05,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.075,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.1,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.125,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.15,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.175,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.2,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.225,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.04,
+            "balanced_accuracy": 0.52
+          },
+          {
+            "threshold": 0.25,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.06,
+            "balanced_accuracy": 0.53
+          },
+          {
+            "threshold": 0.275,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.14,
+            "balanced_accuracy": 0.565
+          },
+          {
+            "threshold": 0.3,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.23,
+            "balanced_accuracy": 0.61
+          },
+          {
+            "threshold": 0.325,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.44,
+            "balanced_accuracy": 0.715
+          },
+          {
+            "threshold": 0.35,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.51,
+            "balanced_accuracy": 0.75
+          },
+          {
+            "threshold": 0.375,
+            "answer_rate_in_scope": 0.95,
+            "abstain_rate_out_of_scope": 0.67,
+            "balanced_accuracy": 0.81
+          },
+          {
+            "threshold": 0.4,
+            "answer_rate_in_scope": 0.92,
+            "abstain_rate_out_of_scope": 0.8,
+            "balanced_accuracy": 0.8600000000000001
+          },
+          {
+            "threshold": 0.425,
+            "answer_rate_in_scope": 0.88,
+            "abstain_rate_out_of_scope": 0.85,
+            "balanced_accuracy": 0.865
+          },
+          {
+            "threshold": 0.45,
+            "answer_rate_in_scope": 0.83,
+            "abstain_rate_out_of_scope": 0.9,
+            "balanced_accuracy": 0.865
+          },
+          {
+            "threshold": 0.475,
+            "answer_rate_in_scope": 0.81,
+            "abstain_rate_out_of_scope": 0.95,
+            "balanced_accuracy": 0.88
+          },
+          {
+            "threshold": 0.5,
+            "answer_rate_in_scope": 0.74,
+            "abstain_rate_out_of_scope": 0.97,
+            "balanced_accuracy": 0.855
+          },
+          {
+            "threshold": 0.525,
+            "answer_rate_in_scope": 0.71,
+            "abstain_rate_out_of_scope": 0.99,
+            "balanced_accuracy": 0.85
+          },
+          {
+            "threshold": 0.55,
+            "answer_rate_in_scope": 0.63,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.815
+          },
+          {
+            "threshold": 0.575,
+            "answer_rate_in_scope": 0.52,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.76
+          },
+          {
+            "threshold": 0.6,
+            "answer_rate_in_scope": 0.46,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.73
+          },
+          {
+            "threshold": 0.625,
+            "answer_rate_in_scope": 0.38,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.69
+          },
+          {
+            "threshold": 0.65,
+            "answer_rate_in_scope": 0.32,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.66
+          },
+          {
+            "threshold": 0.675,
+            "answer_rate_in_scope": 0.22,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.61
+          },
+          {
+            "threshold": 0.7,
+            "answer_rate_in_scope": 0.12,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.56
+          },
+          {
+            "threshold": 0.725,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.53
+          },
+          {
+            "threshold": 0.75,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.53
+          },
+          {
+            "threshold": 0.775,
+            "answer_rate_in_scope": 0.03,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.515
+          },
+          {
+            "threshold": 0.8,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.825,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.85,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.875,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.9,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.925,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.95,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.975,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 1.0,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          }
+        ],
+        "negative_median": 0.3420725464820862
+      },
+      "in_corpus_unanswerable": {
+        "auroc": 0.6356,
+        "best": {
+          "threshold": 0.6,
+          "answer_rate_in_scope": 0.46,
+          "abstain_rate_out_of_scope": 0.74,
+          "balanced_accuracy": 0.6
+        },
+        "sweep": [
+          {
+            "threshold": 0.0,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.025,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.05,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.075,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.1,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.125,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.15,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.175,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.2,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.225,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.25,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.275,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.495
+          },
+          {
+            "threshold": 0.3,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.01,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.325,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.06,
+            "balanced_accuracy": 0.525
+          },
+          {
+            "threshold": 0.35,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.12,
+            "balanced_accuracy": 0.5549999999999999
+          },
+          {
+            "threshold": 0.375,
+            "answer_rate_in_scope": 0.95,
+            "abstain_rate_out_of_scope": 0.12,
+            "balanced_accuracy": 0.5349999999999999
+          },
+          {
+            "threshold": 0.4,
+            "answer_rate_in_scope": 0.92,
+            "abstain_rate_out_of_scope": 0.19,
+            "balanced_accuracy": 0.555
+          },
+          {
+            "threshold": 0.425,
+            "answer_rate_in_scope": 0.88,
+            "abstain_rate_out_of_scope": 0.23,
+            "balanced_accuracy": 0.555
+          },
+          {
+            "threshold": 0.45,
+            "answer_rate_in_scope": 0.83,
+            "abstain_rate_out_of_scope": 0.27,
+            "balanced_accuracy": 0.55
+          },
+          {
+            "threshold": 0.475,
+            "answer_rate_in_scope": 0.81,
+            "abstain_rate_out_of_scope": 0.33,
+            "balanced_accuracy": 0.5700000000000001
+          },
+          {
+            "threshold": 0.5,
+            "answer_rate_in_scope": 0.74,
+            "abstain_rate_out_of_scope": 0.42,
+            "balanced_accuracy": 0.58
+          },
+          {
+            "threshold": 0.525,
+            "answer_rate_in_scope": 0.71,
+            "abstain_rate_out_of_scope": 0.47,
+            "balanced_accuracy": 0.59
+          },
+          {
+            "threshold": 0.55,
+            "answer_rate_in_scope": 0.63,
+            "abstain_rate_out_of_scope": 0.56,
+            "balanced_accuracy": 0.595
+          },
+          {
+            "threshold": 0.575,
+            "answer_rate_in_scope": 0.52,
+            "abstain_rate_out_of_scope": 0.65,
+            "balanced_accuracy": 0.585
+          },
+          {
+            "threshold": 0.6,
+            "answer_rate_in_scope": 0.46,
+            "abstain_rate_out_of_scope": 0.74,
+            "balanced_accuracy": 0.6
+          },
+          {
+            "threshold": 0.625,
+            "answer_rate_in_scope": 0.38,
+            "abstain_rate_out_of_scope": 0.8,
+            "balanced_accuracy": 0.5900000000000001
+          },
+          {
+            "threshold": 0.65,
+            "answer_rate_in_scope": 0.32,
+            "abstain_rate_out_of_scope": 0.85,
+            "balanced_accuracy": 0.585
+          },
+          {
+            "threshold": 0.675,
+            "answer_rate_in_scope": 0.22,
+            "abstain_rate_out_of_scope": 0.91,
+            "balanced_accuracy": 0.5650000000000001
+          },
+          {
+            "threshold": 0.7,
+            "answer_rate_in_scope": 0.12,
+            "abstain_rate_out_of_scope": 0.94,
+            "balanced_accuracy": 0.53
+          },
+          {
+            "threshold": 0.725,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 0.96,
+            "balanced_accuracy": 0.51
+          },
+          {
+            "threshold": 0.75,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 0.97,
+            "balanced_accuracy": 0.515
+          },
+          {
+            "threshold": 0.775,
+            "answer_rate_in_scope": 0.03,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.515
+          },
+          {
+            "threshold": 0.8,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.825,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.85,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.875,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.9,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.925,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.95,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.975,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 1.0,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          }
+        ],
+        "negative_median": 0.5319299399852753
+      },
+      "combined": {
+        "auroc": 0.79345,
+        "best": {
+          "threshold": 0.475,
+          "answer_rate_in_scope": 0.81,
+          "abstain_rate_out_of_scope": 0.64,
+          "balanced_accuracy": 0.7250000000000001
+        },
+        "sweep": [
+          {
+            "threshold": 0.0,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.025,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.05,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.075,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.1,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.125,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.15,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.175,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.2,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.225,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.02,
+            "balanced_accuracy": 0.51
+          },
+          {
+            "threshold": 0.25,
+            "answer_rate_in_scope": 1.0,
+            "abstain_rate_out_of_scope": 0.03,
+            "balanced_accuracy": 0.515
+          },
+          {
+            "threshold": 0.275,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.07,
+            "balanced_accuracy": 0.53
+          },
+          {
+            "threshold": 0.3,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.12,
+            "balanced_accuracy": 0.5549999999999999
+          },
+          {
+            "threshold": 0.325,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.25,
+            "balanced_accuracy": 0.62
+          },
+          {
+            "threshold": 0.35,
+            "answer_rate_in_scope": 0.99,
+            "abstain_rate_out_of_scope": 0.315,
+            "balanced_accuracy": 0.6525
+          },
+          {
+            "threshold": 0.375,
+            "answer_rate_in_scope": 0.95,
+            "abstain_rate_out_of_scope": 0.395,
+            "balanced_accuracy": 0.6725
+          },
+          {
+            "threshold": 0.4,
+            "answer_rate_in_scope": 0.92,
+            "abstain_rate_out_of_scope": 0.495,
+            "balanced_accuracy": 0.7075
+          },
+          {
+            "threshold": 0.425,
+            "answer_rate_in_scope": 0.88,
+            "abstain_rate_out_of_scope": 0.54,
+            "balanced_accuracy": 0.71
+          },
+          {
+            "threshold": 0.45,
+            "answer_rate_in_scope": 0.83,
+            "abstain_rate_out_of_scope": 0.585,
+            "balanced_accuracy": 0.7075
+          },
+          {
+            "threshold": 0.475,
+            "answer_rate_in_scope": 0.81,
+            "abstain_rate_out_of_scope": 0.64,
+            "balanced_accuracy": 0.7250000000000001
+          },
+          {
+            "threshold": 0.5,
+            "answer_rate_in_scope": 0.74,
+            "abstain_rate_out_of_scope": 0.695,
+            "balanced_accuracy": 0.7175
+          },
+          {
+            "threshold": 0.525,
+            "answer_rate_in_scope": 0.71,
+            "abstain_rate_out_of_scope": 0.73,
+            "balanced_accuracy": 0.72
+          },
+          {
+            "threshold": 0.55,
+            "answer_rate_in_scope": 0.63,
+            "abstain_rate_out_of_scope": 0.78,
+            "balanced_accuracy": 0.7050000000000001
+          },
+          {
+            "threshold": 0.575,
+            "answer_rate_in_scope": 0.52,
+            "abstain_rate_out_of_scope": 0.825,
+            "balanced_accuracy": 0.6725
+          },
+          {
+            "threshold": 0.6,
+            "answer_rate_in_scope": 0.46,
+            "abstain_rate_out_of_scope": 0.87,
+            "balanced_accuracy": 0.665
+          },
+          {
+            "threshold": 0.625,
+            "answer_rate_in_scope": 0.38,
+            "abstain_rate_out_of_scope": 0.9,
+            "balanced_accuracy": 0.64
+          },
+          {
+            "threshold": 0.65,
+            "answer_rate_in_scope": 0.32,
+            "abstain_rate_out_of_scope": 0.925,
+            "balanced_accuracy": 0.6225
+          },
+          {
+            "threshold": 0.675,
+            "answer_rate_in_scope": 0.22,
+            "abstain_rate_out_of_scope": 0.955,
+            "balanced_accuracy": 0.5875
+          },
+          {
+            "threshold": 0.7,
+            "answer_rate_in_scope": 0.12,
+            "abstain_rate_out_of_scope": 0.97,
+            "balanced_accuracy": 0.5449999999999999
+          },
+          {
+            "threshold": 0.725,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 0.98,
+            "balanced_accuracy": 0.52
+          },
+          {
+            "threshold": 0.75,
+            "answer_rate_in_scope": 0.06,
+            "abstain_rate_out_of_scope": 0.985,
+            "balanced_accuracy": 0.5225
+          },
+          {
+            "threshold": 0.775,
+            "answer_rate_in_scope": 0.03,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.515
+          },
+          {
+            "threshold": 0.8,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.825,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.85,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.875,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.9,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.925,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.95,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 0.975,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "threshold": 1.0,
+            "answer_rate_in_scope": 0.0,
+            "abstain_rate_out_of_scope": 1.0,
+            "balanced_accuracy": 0.5
+          }
+        ],
+        "negative_median": 0.40278390049934387
+      }
+    }
+  }
+}

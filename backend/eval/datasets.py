@@ -149,6 +149,31 @@ def load_coqa(split="validation", n_docs=60, seed=0):
     return _split_docs(docs, questions, n_docs, 0, seed)
 
 
+def load_hotpotqa(split="validation", n_docs=60, n_out_of_scope_docs=15, seed=0):
+    """Load HotpotQA's multi-hop questions into the shared document format."""
+    df = load_parquet(
+        "hotpotqa",
+        split,
+        url=f"https://huggingface.co/api/datasets/hotpotqa/hotpot_qa/parquet/distractor/{split}/0.parquet",
+    )
+    docs, questions = {}, []
+    for _, row in df.iterrows():
+        doc_id = row["id"]
+        titles = row["context"]["title"]
+        sentences = row["context"]["sentences"]
+        pages = [{"page": i + 1, "text": f"{title}\n" + " ".join(text)}
+                 for i, (title, text) in enumerate(zip(titles, sentences))]
+        docs[doc_id] = {"doc_id": doc_id, "title": doc_id, "pages": pages}
+        supporting = set(row["supporting_facts"]["title"])
+        evidence = [p["text"] for p in pages if p["text"].split("\n", 1)[0] in supporting]
+        answer = str(row["answer"])
+        questions.append({
+            "qid": doc_id, "question": row["question"], "answers": [] if answer == "noanswer" else [answer],
+            "answerable": answer != "noanswer", "doc_id": doc_id, "evidence": evidence, "history": [],
+        })
+    return _split_docs(docs, questions, n_docs, n_out_of_scope_docs, seed)
+
+
 # --- RAGTruth ----------------------------------------------------------------
 def load_ragtruth(split="test", task_types=("QA",), n=300, seed=0):
     df = load_parquet("ragtruth", split)
@@ -193,4 +218,7 @@ def load_ragbench(split="test", subsets=("techqa", "emanual", "pubmedqa", "hotpo
     return rows[:n]
 
 
-LOADERS = {"qasper": load_qasper, "squad_v2": load_squad_v2, "coqa": load_coqa}
+LOADERS = {
+    "qasper": load_qasper, "squad_v2": load_squad_v2, "coqa": load_coqa,
+    "hotpotqa": load_hotpotqa,
+}

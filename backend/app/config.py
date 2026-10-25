@@ -145,7 +145,7 @@ RELATIVE_SCORE_CUTOFF = settings.relative_score_cutoff
 SUPPORT_THRESHOLD = settings.support_threshold
 GROUNDEDNESS_THRESHOLD = settings.groundedness_threshold
 RERANKER_RELEVANCE_THRESHOLD = 0.125  # calibrated on SQuAD v2, see docs/evaluation.md
-DENSE_RELEVANCE_THRESHOLD = 0.25  # cosine similarity for the default MiniLM embeddings
+DENSE_RELEVANCE_THRESHOLD = 0.30  # calibrated combined-negative sweep; preserves >=0.9 answer rate
 MAX_HISTORY_MESSAGES = settings.max_history_messages
 
 NOT_FOUND_ANSWER = "I could not find that information in the uploaded material."
