@@ -1,7 +1,8 @@
 # Evaluation plan: datasets, hallucination control, thresholds, model size
 
 Everything here is run from `backend/` with `python -m eval.run <command>` (see `eval/run.py`).
-Numbers below come from the committed runs in `backend/eval/results/` (2026-10-19).
+Numbers below come from the committed runs in `backend/eval/results/` (2026-10-19)
+and the additional CPU runs on 2026-10-23/24.
 
 ## 1. Datasets (what each one is for)
 
@@ -32,6 +33,21 @@ hand-label 30-50 questions on your own lecture PDFs: that is the only in-domain 
 | hybrid + rerank | 0.14 | 0.37 | 0.46 | 0.24 |
 
 Retrieval is the weakest part: even the best config finds a relevant chunk in the top 5 only 37% of the time.
+
+**Re-run (QASPER validation, n=100, 40 indexed papers).** These numbers use the
+current harness and its 4-gram evidence metric:
+
+| config | hit@1 | hit@5 | hit@10 | MRR@10 |
+|---|---:|---:|---:|---:|
+| MiniLM fixed baseline | 0.060 | 0.200 | 0.300 | 0.123 |
+| BGE dense | 0.130 | 0.250 | 0.350 | 0.178 |
+| BGE hybrid | 0.080 | 0.260 | 0.360 | 0.164 |
+| BGE hybrid + reranker | 0.130 | 0.340 | 0.430 | 0.217 |
+| fine-tuned BGE dense | 0.150 | 0.280 | 0.390 | 0.210 |
+| fine-tuned BGE hybrid + reranker | 0.130 | 0.340 | 0.430 | 0.218 |
+
+The fine-tune used 1,000 QASPER pairs and one CPU epoch. It improved dense
+retrieval but did not improve the reranked hit@5 over the unfine-tuned model.
 The reranker doubles hit@1 but costs about 1.1 s per query. Likely causes and fixes, in order of expected payoff:
 1. **Bigger candidate pool for the reranker** (`CANDIDATE_K` 20 -> 50): hit@10 (0.46) is far above hit@5, so the right chunk is often reachable but ranked low.
 2. **Stronger reranker** (`BAAI/bge-reranker-base`, `RERANKER_MODEL` env var) and **bge-base** embeddings.
@@ -79,14 +95,35 @@ python -m eval.run hallucination --source ragbench --nli-model cross-encoder/nli
 python -m eval.run conversation
 ```
 
-## 4. Defaults vs. the evaluation settings
+## 4. Threshold calibration and defaults
+
+The shipped MiniLM dense configuration was calibrated with the combined
+out-of-corpus and in-corpus-unanswerable negative sweep on SQuAD v2 and QASPER
+(100 answerable questions per run). A threshold of **0.30** was selected because
+it keeps the measured answer rate at approximately 0.99 on both datasets; higher
+thresholds reached only about 0.51-0.81 answer rate. This satisfies the
+answerable-rate floor but leaves hard in-corpus negatives difficult to separate
+(combined-negative AUROC 0.793 on SQuAD v2 and 0.614 on QASPER).
+
+The shipped default is therefore `all-MiniLM-L6-v2`, dense-only, cosine threshold
+0.30. The reranker threshold remains 0.125 and is a separate score scale.
+
+## 5. Defaults vs. the evaluation settings
 The evaluation harness measured the reranked, hybrid, BGE configuration. The application defaults follow the project spec instead
 (`all-MiniLM-L6-v2`, dense retrieval only) because it is the lightest on RAM. To reproduce the measured quality in the app, set
 `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 USE_HYBRID=1 USE_RERANKER=1` (and optionally `USE_GROUNDING_CHECK=1`); the relevance threshold then
 defaults to 0.125 (reranker scale). With the default MiniLM dense mode the threshold is 0.25 cosine: calibrate it with `python -m eval.run threshold`.
 Re-upload documents after changing the embedding model.
 
-## 5. Running safely on a laptop
+## 6. Multi-hop and multi-turn coverage
+
+`eval.datasets.load_hotpotqa` now loads HotpotQA distractor validation rows into
+the common document/question format, including supporting-fact evidence and
+unanswerable `noanswer` rows. A few real validation rows were verified locally.
+`load_coqa` remains the multi-turn loader and was already exercised by the
+conversation command; it provides turn history in the same format.
+
+## 7. Running safely on a laptop
 
 The Windows freezes were memory exhaustion: up to three models (embedder, reranker, NLI) plus Ollama plus torch.
 - Uploads are streamed to disk in 1 MB blocks and capped (`MAX_PDF_SIZE_MB`, `MAX_MEDIA_SIZE_MB`); only one ingestion runs at a time.
