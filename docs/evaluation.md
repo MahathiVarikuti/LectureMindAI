@@ -105,8 +105,12 @@ thresholds reached only about 0.51-0.81 answer rate. This satisfies the
 answerable-rate floor but leaves hard in-corpus negatives difficult to separate
 (combined-negative AUROC 0.793 on SQuAD v2 and 0.614 on QASPER).
 
-The shipped default is therefore `all-MiniLM-L6-v2`, dense-only, cosine threshold
-0.30. The reranker threshold remains 0.125 and is a separate score scale.
+The shipped default is `all-MiniLM-L6-v2`, dense-only, with a **0.15** cosine threshold
+(`DENSE_RELEVANCE_THRESHOLD`). 0.30 is the benchmark-optimal value, but real lecture and resume
+PDFs score the right chunk only 0.15-0.3, so 0.15 was chosen to avoid false refusals; in dense mode
+the threshold gates only the best chunk (`per_chunk_threshold=False`). Raise it via
+`RELEVANCE_THRESHOLD=0.30` for stricter abstention. The reranker threshold remains 0.125 and is a
+separate score scale; re-calibrate it if you switch to the fine-tuned reranker.
 
 ## 5. Defaults vs. the evaluation settings
 The evaluation harness measured the reranked, hybrid, BGE configuration. The application defaults follow the project spec instead
@@ -130,3 +134,31 @@ The Windows freezes were memory exhaustion: up to three models (embedder, rerank
 - Run one process stack at a time (not Docker and local uvicorn together).
 - For a first run set `USE_RERANKER=0 USE_GROUNDING_CHECK=0`, then enable each and watch RAM.
 - Eval runs: start with `-n 50`; close other apps; run one model per command.
+
+## 8. Fine-tuning (what was trained, on what, and the results)
+
+All training runs on a 12-core laptop CPU with ~2.6 GB free RAM; trained weights go to the git-ignored
+`backend/models/`. Held-out data is never used for training.
+
+| Model | Script | Training data | Status |
+|---|---|---|---|
+| NLI grounding checker (`cross-encoder/nli-deberta-v3-small`) | `eval/finetune_grounding.py` | RAGBench **train**, 7 domains, 2,000 balanced sentence pairs (supported / unsupported), 2 epochs, word embeddings frozen (43.5M trainable params), about 45 min | trained, evaluated |
+| Embedder (`bge-small` / MiniLM) | `eval/finetune_embedder.py` | QASPER train questions + hard same-paper negatives | script upgraded to hard negatives; earlier 1k-pair run in section 2 |
+| Reranker (`ms-marco-MiniLM-L-6-v2`) | `eval/finetune_reranker.py` | QASPER train, 1 positive + 3 same-paper negatives per question | script written, **not yet run** |
+
+**Grounding checker, evaluated on RAGTruth (300 QA responses, 49 hallucinated; never trained on):**
+
+| | AUROC groundedness | AUROC min-support | best F1 (threshold) |
+|---|---|---|---|
+| original NLI model | 0.651 | 0.741 | 0.36 (groundedness 0.35) |
+| fine-tuned | 0.742 | 0.785 | 0.52 (min-support 0.45) |
+
+Caveats: best-F1 thresholds were selected on the same RAGTruth sample, so treat them as optimistic, and the
+run is a single n=300 sample. The fine-tuned model on RAGBench test (n=300, 91 hallucinated, same source as training) gives
+AUROC 0.603 (groundedness) / 0.665 (min-support), best F1 0.52 at min-support 0.85. At the current
+`GROUNDEDNESS_THRESHOLD=0.6` the fine-tuned model has precision 0.39 and recall 0.25 on RAGTruth, so the
+threshold must be re-tuned before enabling it. Keep the flag as a UI warning, not a hard refusal.
+To use it: `NLI_MODEL=backend/models/nli-deberta-lecturemind`.
+
+Datasets reviewed and rejected: the Civitai multimodal-RAG set (AI-generated image prompts, no questions or labels).
+Lecture-specific candidates not yet used: LPM (slides + speech), LecSlides-370K, MMLongBench-Doc, SPIQA, HaluBench, LLM-AggreFact.

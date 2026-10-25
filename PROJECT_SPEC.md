@@ -278,3 +278,16 @@ Build in this exact sequence — later steps depend on earlier ones being correc
 - No paid LLM API — Ollama local only.
 - No streaming responses.
 - No multi-worker/horizontal scaling setup.
+
+---
+
+## 12. Evaluation and Model Tuning (post-V1 addendum)
+
+V1 defaults above are unchanged (MiniLM, dense, `qwen2.5:1.5b`). After V1 an evaluation harness and fine-tuning scripts were added in `backend/eval/`; everything they enable is opt-in via environment variables.
+
+- **Datasets:** QASPER (retrieval, embedder/reranker fine-tuning), SQuAD v2 (abstention threshold, generation), CoQA (query rewriting), RAGTruth and RAGBench (hallucination detector training and evaluation). Training and evaluation use disjoint splits.
+- **Metrics:** hit@k, MRR, nDCG (retrieval); AUROC and balanced accuracy of the abstention threshold; answer recall, false-refusal rate, p95 latency (generation); AUROC, precision, recall, F1 (hallucination).
+- **Fine-tuned models:** NLI grounding checker (RAGBench train), hard-negative embedder and reranker (QASPER train). Weights are not committed (`backend/models/` is git-ignored); reproduce with the commands in README.
+- **Thresholds:** dense relevance 0.15 (cosine; benchmark-optimal 0.30), reranker 0.125, grounding threshold to be re-tuned for the fine-tuned checker. See `docs/evaluation.md`.
+- **Constraint:** all training must run on a CPU laptop (frozen embedding matrices, small batches, one process at a time).
+

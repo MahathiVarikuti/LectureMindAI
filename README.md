@@ -81,8 +81,18 @@ pytest
 ```
 The suite fakes the embedder, LLM, Whisper and CLIP, so it needs no model downloads. It covers chunking, upload limits, every modality's round trip, **session isolation**, deletion (vectors + file), the empty-context guard, rate limiting and error mapping. It never asserts exact LLM wording.
 
-## Evaluation
+## Evaluation and fine-tuning
 Retrieval, abstention-threshold, hallucination and model-size experiments (QASPER, SQuAD v2, CoQA, RAGTruth, RAGBench) live in `backend/eval/`; see [docs/evaluation.md](docs/evaluation.md). They also power the optional hybrid search, reranker and NLI grounding check (`USE_HYBRID`, `USE_RERANKER`, `USE_GROUNDING_CHECK`, all off by default).
+
+Fine-tuning scripts (CPU-friendly; weights are written to the git-ignored `backend/models/`):
+```bash
+cd backend
+python -m eval.finetune_grounding --pairs 2000 --epochs 2   # hallucination checker, RAGBench train
+python -m eval.finetune_embedder  --pairs 3000 --epochs 2   # embedder, QASPER train + hard negatives
+python -m eval.finetune_reranker  --pairs 3000 --epochs 2   # reranker, QASPER train
+python -m eval.run hallucination --source ragtruth --nli-model models/nli-deberta-lecturemind
+```
+The fine-tuned grounding checker raises hallucination-detection AUROC on held-out RAGTruth from 0.65 to 0.74 (best F1 0.36 to 0.52). Embedder and reranker fine-tunes are still to be evaluated.
 
 ## Known limitations
 - Audio, video and URL ingestion are implemented and tested with fakes; the PDF path is the one exercised end to end with real models.
