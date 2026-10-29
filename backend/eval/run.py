@@ -39,6 +39,7 @@ RETRIEVAL_CONFIGS = {
     "dense_bge":     dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=False, rerank=False),
     "hybrid_bge":    dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=False),
     "hybrid_rerank": dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=True),
+    "minilm_hybrid_rerank": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True),
 }
 _index_cache = {}
 
@@ -311,10 +312,16 @@ def main():
     p.add_argument("--models", nargs="+", default=[config.LLM_MODEL])
     p.add_argument("--threshold", type=float, help="override RELEVANCE_THRESHOLD")
     p.add_argument("--embed-model", help="also evaluate this (e.g. fine-tuned) embedding model")
+    p.add_argument("--reranker-model", help="override RERANKER_MODEL (e.g. models/reranker-lecturemind)")
+    p.add_argument("--candidate-k", type=int, help="override CANDIDATE_K, the pool the reranker sees")
     p.add_argument("--no-grounding", action="store_true", help="skip the NLI grounding check (faster)")
     args = p.parse_args()
     if args.nli_model:
         config.NLI_MODEL = args.nli_model
+    if args.reranker_model:
+        config.RERANKER_MODEL = args.reranker_model
+    if args.candidate_k:
+        config.CANDIDATE_K = args.candidate_k
     if args.embed_model:
         RETRIEVAL_CONFIGS["custom_dense"] = dict(chunker="smart", embed=args.embed_model, hybrid=False, rerank=False)
         RETRIEVAL_CONFIGS["custom_hybrid_rerank"] = dict(chunker="smart", embed=args.embed_model, hybrid=True, rerank=True)

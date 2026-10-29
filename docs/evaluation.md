@@ -170,3 +170,42 @@ MiniCheck or HHEM. Keep the flag as a UI warning, not a hard refusal. To try it:
 
 Datasets reviewed and rejected: the Civitai multimodal-RAG set (AI-generated image prompts, no questions or labels).
 Lecture-specific candidates not yet used: LPM (slides + speech), LecSlides-370K, MMLongBench-Doc, SPIQA, HaluBench, LLM-AggreFact.
+
+## 9. Retrieval fine-tuning results and the recommended profile
+
+QASPER validation, 100 questions, 40 indexed papers, hybrid (dense + BM25) retrieval, 20 candidates unless noted.
+
+| Configuration | hit@1 | hit@3 | hit@5 | MRR@10 | latency |
+|---|---:|---:|---:|---:|---:|
+| BGE + original reranker | 0.13 | 0.26 | 0.34 | 0.217 | 1.4 s |
+| BGE + **fine-tuned reranker** | 0.18 | 0.30 | 0.42 | 0.265 | 1.1 s |
+| BGE (fine-tuned) + fine-tuned reranker | 0.18 | 0.30 | 0.43 | 0.269 | 1.2 s |
+| BGE + fine-tuned reranker, 50 candidates | 0.19 | 0.29 | 0.40 | 0.277 | 2.6 s |
+| BGE + original reranker, 50 candidates | 0.13 | 0.28 | 0.34 | 0.220 | 2.9 s |
+| **MiniLM + fine-tuned reranker (recommended)** | **0.19** | **0.35** | **0.45** | **0.289** | 1.3 s |
+
+- The reranker was fine-tuned on QASPER train (`eval/finetune_reranker.py`: 3,000 pairs, 1 positive + 3 same-paper negatives per question, 2 epochs, about 21 min on CPU). It raised hit@5 from 0.34 to 0.42 with the same candidates.
+- A bigger candidate pool (50) did not help and doubled latency, so `CANDIDATE_K` stays 20.
+- Fine-tuning the BGE embedder on top added nothing measurable (0.43 vs 0.42, within noise).
+- The best result keeps the shipped MiniLM embeddings, so existing documents need no re-upload.
+- Caveats: the reranker was trained and evaluated on scientific papers (QASPER); n=100 means differences of a few points are noise, and the gain on real lecture material is unverified. The MiniLM-vs-BGE ordering differs from section 2 because the reranker, not the embedder, now decides the final order.
+
+**Abstention threshold for the fine-tuned reranker.** Fine-tuning changes the score scale: good matches now score near 1.0 (median 0.97 on SQuAD v2), so the old 0.125 threshold rejects almost nothing.
+
+| Threshold | answer rate (SQuAD v2 / QASPER) | refuses unrelated questions (SQuAD v2 / QASPER) |
+|---|---|---|
+| 0.30 | 0.99 / 1.00 | 0.79 / 0.06 |
+| 0.50 | 0.94 / 0.95 | 0.86 / 0.08 |
+| 0.70 | 0.88 / 0.95 | 0.94 / 0.18 |
+
+Out-of-corpus AUROC is 0.979 on SQuAD v2 but only 0.63 on QASPER, where unrelated papers are on similar topics. Questions about an indexed document that it does not answer are barely separable (AUROC 0.60 on SQuAD v2, 0.70 on QASPER). The recommended `RELEVANCE_THRESHOLD=0.30` keeps about 99% of answerable questions; raise it for stricter abstention. Do not use 0.30 with the dense-only default, whose cosine scale needs 0.15.
+
+**Recommended profile** (set in `backend/.env`; weights are git-ignored, train them with `python -m eval.finetune_reranker`):
+```
+USE_HYBRID=1
+USE_RERANKER=1
+RERANKER_MODEL=models/reranker-lecturemind
+RELEVANCE_THRESHOLD=0.30
+```
+
+**Citations.** The answer's `[n]` markers are now reconciled with the source list (`align_citations` in `rag_pipeline.py`): only the sources the answer cites are listed, renumbered in order of first use, and video frames are always kept. With the reranker on, the "match" percentage on each source is the reranker's relevance probability instead of a raw MiniLM cosine, so a correct source shows about 85-90% rather than 22-52%.

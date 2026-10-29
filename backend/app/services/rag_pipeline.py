@@ -5,6 +5,7 @@
           -> grounded generation with citations
           -> NLI grounding check (flag / abstain on hallucination)
 """
+import re
 import time
 
 from app import config
@@ -33,6 +34,33 @@ def _source(chunk):
         "text": chunk["text"],
         "score": round(float(chunk["score"]), 4),
     }
+
+
+_CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def align_citations(answer, sources):
+    """Keep only the text sources the answer actually cites, renumbered 1..n in order of first use.
+
+    The LLM cites passages as [1], [2]...; listing sources it never used makes the
+    citations look wrong. Video frames are always kept (they are visual evidence the
+    LLM cannot quote). If the answer cites nothing valid, return everything unchanged.
+    """
+    order = []
+    for match in _CITATION.finditer(answer):
+        for n in (int(x) for x in match.group(1).split(",")):
+            if 1 <= n <= len(sources) and n not in order:
+                order.append(n)
+    if not order:
+        return answer, sources
+    order += [i for i, s in enumerate(sources, start=1) if s.get("modality") == "video_frame" and i not in order]
+    new_number = {old: new for new, old in enumerate(order, start=1)}
+
+    def rewrite(match):
+        numbers = [new_number[n] for n in (int(x) for x in match.group(1).split(",")) if n in new_number]
+        return "[" + ", ".join(str(n) for n in numbers) + "]" if numbers else ""
+
+    return _CITATION.sub(rewrite, answer), [sources[n - 1] for n in order]
 
 
 def answer_question(
@@ -105,6 +133,7 @@ def answer_question(
         timings["total"] = time.perf_counter() - t0
         return result
     result["abstained"] = False
+    result["answer"], result["sources"] = align_citations(answer, result["sources"])
 
     use_grounding = config.USE_GROUNDING_CHECK if grounding is None else grounding
     if use_grounding:

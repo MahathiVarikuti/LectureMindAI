@@ -121,7 +121,7 @@ Details: [docs/architecture.md](docs/architecture.md). Security model and its li
 | Setting | Default | Meaning |
 |---|---|---|
 | Dense relevance threshold | 0.15 cosine | best chunk below this → "not found" |
-| Reranker threshold | 0.125 | the same gate on the reranker's probability scale |
+| Reranker threshold | 0.125 (stock reranker), 0.30 (fine-tuned) | the same gate on the reranker's probability scale |
 | Grounding threshold | 0.6 | fraction of supported sentences below which an answer is flagged |
 
 The benchmark-optimal dense threshold is 0.30, but real lecture PDFs often score the right chunk only 0.15-0.3, so 0.15 is the shipped default to avoid false refusals. Set `RELEVANCE_THRESHOLD=0.30` for stricter abstention. Reasoning and sweeps are in [docs/evaluation.md](docs/evaluation.md).
@@ -143,8 +143,10 @@ An evaluation harness in `backend/eval/` measures retrieval, abstention threshol
 | BGE dense | 0.13 | 0.25 | 0.35 | 0.18 |
 | BGE hybrid | 0.08 | 0.26 | 0.36 | 0.16 |
 | BGE hybrid + reranker | 0.13 | 0.34 | 0.43 | 0.22 |
+| BGE hybrid + **fine-tuned reranker** | 0.18 | 0.42 | - | 0.27 |
+| **MiniLM hybrid + fine-tuned reranker (recommended)** | **0.19** | **0.45** | - | **0.29** |
 
-Retrieval is the weakest part: even the best configuration finds a relevant chunk in the top 5 only 34% of the time. The reranker doubles hit@1 at a cost of about 1.1 s per query.
+Retrieval is still the weakest part, but fine-tuning the reranker on QASPER lifted hit@5 from 0.34 to 0.45 (best configuration, about 1.3 s per query). The numbers come from scientific papers, not lecture material, and n=100, so treat them as indicative.
 
 ### Hallucination detector (fine-tuned NLI model)
 | Test set (n=300) | Original AUROC | Fine-tuned AUROC |
@@ -152,7 +154,7 @@ Retrieval is the weakest part: even the best configuration finds a relevant chun
 | RAGTruth (held out, never trained on) | 0.65 | 0.74 |
 | RAGBench test | 0.61 | 0.60 |
 
-The fine-tune helps on RAGTruth but gives no gain on RAGBench test, so it is **not** the default. Embedder and reranker fine-tunes are in progress and will be added to [docs/evaluation.md](docs/evaluation.md).
+The fine-tune helps on RAGTruth but gives no gain on RAGBench test, so it is **not** the default. See [docs/evaluation.md](docs/evaluation.md) section 9 for the retrieval fine-tuning results and the recommended profile.
 
 ### Small vs larger LLM (SQuAD v2, n=120)
 | | qwen2.5:1.5b | qwen2.5:3b |
@@ -216,6 +218,16 @@ docker compose exec ollama ollama pull qwen2.5:1.5b      # first run only
 ```
 Frontend: http://localhost:3000, API: http://localhost:8000.
 
+### Best-quality profile
+For better retrieval and meaningful match scores, put this in `backend/.env` (see section 9 of [docs/evaluation.md](docs/evaluation.md); the fine-tuned reranker is trained locally with `python -m eval.finetune_reranker`):
+```
+USE_HYBRID=1
+USE_RERANKER=1
+RERANKER_MODEL=models/reranker-lecturemind
+RELEVANCE_THRESHOLD=0.30
+```
+With the reranker on, the "match" percentage shown on each source is the reranker's relevance probability, and the sources listed are only the ones the answer cites.
+
 ### Tuning for a CPU-only laptop
 The defaults are the lightest configuration: dense retrieval only, no reranker, no NLI check, one ingestion at a time and Whisper `base`.
 
@@ -266,7 +278,7 @@ LectureMindAI/
 - The `model` field of `/query` is client-controlled; do not expose the API publicly without restricting it
 - Sessions are browser-local UUIDs: clearing site data or switching browsers loses access to earlier documents and history. This is a deliberate V1 trade-off, not real authentication
 - Scanned PDFs (no text layer) are rejected; there is no OCR
-- Retrieval quality is limited (hit@5 of 0.34 on QASPER), and the hallucination flag is only moderately reliable, so treat it as a warning, not a guarantee
+- Retrieval quality is still limited (hit@5 of 0.45 on QASPER at best), and the hallucination flag is only moderately reliable, so treat it as a warning, not a guarantee
 - yt-dlp import is for your own or openly-licensed content only
 
 ## What I Learned
@@ -280,7 +292,7 @@ LectureMindAI/
 - Testing LLM applications by testing the plumbing around the model, not its exact output
 
 ## Future Improvements
-- Evaluate and ship the fine-tuned embedder and reranker; re-calibrate thresholds for them
+- Ship the fine-tuned reranker weights (currently local only) and verify the gain on real lecture material
 - A stronger hallucination detector (more training data, MiniCheck or HHEM)
 - Hand-labelled lecture questions for an in-domain metric
 - Lecture-specific benchmarks (slides plus speech) and long-document PDF benchmarks

@@ -1,0 +1,14 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.18.10.6:3000
+✓ Ready in 826ms
+
+○ Compiling /chat ...
+ GET /chat 200 in 4.3s (next.js: 3.9s, application-code: 380ms)
+ GET /chat 200 in 84ms (next.js: 19ms, application-code: 65ms)
+ GET /chat 200 in 88ms (next.js: 14ms, application-code: 74ms)
+ GET /chat 200 in 82ms (next.js: 11ms, application-code: 71ms)

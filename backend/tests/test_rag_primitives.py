@@ -91,3 +91,37 @@ class DenseContextTests(unittest.TestCase):
         candidates = [{"id": "a", "text": "t", "score": 0.9}, {"id": "b", "text": "t", "score": 0.05}]
         kept, _ = select_context(candidates, top_k=4, threshold=0.125, per_chunk_threshold=True)
         self.assertEqual([c["id"] for c in kept], ["a"])
+
+
+class AlignCitationsTests(unittest.TestCase):
+    SOURCES = [{"chunk_id": c} for c in "abcd"]
+
+    def test_keeps_only_cited_sources_and_renumbers(self):
+        from app.services.rag_pipeline import align_citations
+
+        answer, sources = align_citations("Python [3]. SQL [1, 3].", self.SOURCES)
+        self.assertEqual(answer, "Python [1]. SQL [2, 1].")
+        self.assertEqual([s["chunk_id"] for s in sources], ["c", "a"])
+
+    def test_no_valid_citation_keeps_all_sources(self):
+        from app.services.rag_pipeline import align_citations
+
+        answer, sources = align_citations("No markers here, or bad [9].", self.SOURCES)
+        self.assertEqual(sources, self.SOURCES)
+        self.assertEqual(answer, "No markers here, or bad [9].")
+
+    def test_out_of_range_marker_is_dropped_when_others_are_valid(self):
+        from app.services.rag_pipeline import align_citations
+
+        answer, sources = align_citations("A [2] B [9].", self.SOURCES)
+        self.assertEqual(answer, "A [1] B .")
+        self.assertEqual([s["chunk_id"] for s in sources], ["b"])
+
+    def test_video_frames_are_always_kept(self):
+        from app.services.rag_pipeline import align_citations
+
+        sources = [{"chunk_id": "a"}, {"chunk_id": "b"}, {"chunk_id": "f", "modality": "video_frame"}]
+        answer, kept = align_citations("Only the second [2].", sources)
+        self.assertEqual([s["chunk_id"] for s in kept], ["b", "f"])
+        self.assertEqual(answer, "Only the second [1].")
+

@@ -15,6 +15,10 @@ os.environ.update({
     "RATE_LIMIT_QUERY": "1000",
     "RATE_LIMIT_UPLOAD": "1000",
     "RELEVANCE_THRESHOLD": "0.2",
+    # a developer's local backend/.env must not change what the tests exercise
+    "USE_HYBRID": "0",
+    "USE_RERANKER": "0",
+    "USE_GROUNDING_CHECK": "0",
 })
 
 import fitz  # noqa: E402

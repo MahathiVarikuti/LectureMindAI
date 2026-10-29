@@ -28,7 +28,8 @@
 - [x] 24. Real-data runs on QASPER, SQuAD v2, CoQA, RAGTruth, RAGBench
 - [x] 25. Fine-tune NLI grounding checker on RAGBench train (RAGTruth AUROC 0.65 -> 0.74; no gain on RAGBench test, so not the default)
 - [x] 26. Hard-negative embedder fine-tuning script
-- [ ] 27. Run reranker and embedder fine-tunes, re-evaluate retrieval and re-calibrate thresholds
+- [x] 27. Fine-tune reranker, re-evaluate retrieval (hit@5 0.34 -> 0.45) and re-calibrate the threshold (0.30)
+- [x] 27b. Align citations with the answer and show reranker relevance as the match score
 - [ ] 28. Improve the grounding checker (more data/epochs, MiniCheck or HHEM), re-tune GROUNDEDNESS_THRESHOLD
 - [ ] 29. Hand-label 30-50 questions on real lecture PDFs (in-domain metric)
 - [ ] 30. Larger-n runs (n>=500) with confidence intervals; compare qwen2.5:7b / llama3.1:8b
