@@ -18,12 +18,13 @@
 On the verification machine, ffmpeg 9.0.2 was already installed and on `PATH`.
 Generated 20-second WAV and MP4 fixtures passed `ffprobe` duration checks; MP4 audio
 extraction and three sampled frames also completed successfully. 
-The real `WHISPER_MODEL=tiny` transcription path is currently blocked on Python 3.14
-by the installed dependency combination `faster-whisper 1.2.1` and `av 19.0.2`:
-PyAV raises `TypeError: open() got an unexpected keyword argument 'metadata_errors'`.
-No compatibility shim was added. Use Python 3.11 (the CI version) for real
-faster-whisper verification until a compatible faster-whisper/PyAV release is
-available for Python 3.14. The mocked test suite remains model- and network-free.
+faster-whisper 1.2.1 decodes audio with PyAV, and PyAV 19 raises
+`TypeError: open() got an unexpected keyword argument 'metadata_errors'` on Python 3.14.
+The app avoids this by decoding audio with `ffmpeg` itself (`decode_audio` in
+`transcription.py`) and passing the samples to Whisper, so it works on any Python version.
+Verified with real speech (Windows text-to-speech WAV, `WHISPER_MODEL=tiny` and `base`):
+the transcript was correct and a question about it returned a cited answer with timestamps.
+The mocked test suite remains model- and network-free.
 
 ## Tests
 `cd backend && pip install -r requirements-dev.txt && pytest` (no model downloads needed).
