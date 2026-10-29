@@ -39,7 +39,11 @@ RETRIEVAL_CONFIGS = {
     "dense_bge":     dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=False, rerank=False),
     "hybrid_bge":    dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=False),
     "hybrid_rerank": dict(chunker="smart", embed="BAAI/bge-small-en-v1.5", hybrid=True, rerank=True),
-    "minilm_hybrid_rerank": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True),
+    "minilm_hybrid_rerank": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True, fuse=False),
+    "minilm_hybrid_rerank_fused": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True, fuse=True, weight=1.0),
+    "minilm_fused_w2": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True, fuse=True, weight=2.0),
+    "minilm_fused_w3": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True, fuse=True, weight=3.0),
+    "minilm_fused_w5": dict(chunker="smart", embed="all-MiniLM-L6-v2", hybrid=True, rerank=True, fuse=True, weight=5.0),
 }
 _index_cache = {}
 
@@ -72,7 +76,8 @@ def build_index(docs, chunker, embed_model, tag):
 
 def make_retriever(docs, cfg, tag):
     col = build_index(docs, cfg["chunker"], cfg["embed"], tag)
-    return Retriever(col, embedding_model=cfg["embed"], use_hybrid=cfg["hybrid"], use_reranker=cfg["rerank"])
+    return Retriever(col, embedding_model=cfg["embed"], use_hybrid=cfg["hybrid"], use_reranker=cfg["rerank"],
+                     fuse_rerank=cfg.get("fuse"), fuse_weight=cfg.get("weight"))
 
 
 def relevance_flags(hits, q):

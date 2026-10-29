@@ -62,6 +62,8 @@ class Retriever:
         use_reranker=None,
         candidate_k=None,
         reranker_model=None,
+        fuse_rerank=None,
+        fuse_weight=None,
     ):
         self.collection = collection
         self.embedding_model = embedding_model or config.EMBEDDING_MODEL
@@ -69,6 +71,8 @@ class Retriever:
         self.use_reranker = config.USE_RERANKER if use_reranker is None else use_reranker
         self.candidate_k = candidate_k or config.CANDIDATE_K
         self.reranker_model = reranker_model
+        self.fuse_rerank = config.RERANK_FUSION if fuse_rerank is None else fuse_rerank
+        self.fuse_weight = config.RERANK_FUSION_WEIGHT if fuse_weight is None else fuse_weight
         # Score scales differ: reranker probability vs. raw cosine similarity.
         self.relevance_threshold = (
             config.RELEVANCE_THRESHOLD if config.RELEVANCE_THRESHOLD is not None
@@ -160,9 +164,17 @@ class Retriever:
 
         if self.use_reranker:
             scores = rerank_scores(query, [c["text"] for c in candidates], self.reranker_model)
-            for c, s in zip(candidates, scores):
+            for rank, (c, s) in enumerate(zip(candidates, scores)):
                 c["score"] = s
-            candidates.sort(key=lambda c: c["score"], reverse=True)
+                c["hybrid_rank"] = rank  # candidates are still in hybrid (RRF) order here
+            by_score = sorted(candidates, key=lambda c: c["score"], reverse=True)
+            if self.fuse_rerank:
+                for rank, c in enumerate(by_score):
+                    c["fused"] = (1.0 / (config.RRF_K + c["hybrid_rank"] + 1)
+                                  + self.fuse_weight / (config.RRF_K + rank + 1))
+                candidates.sort(key=lambda c: c["fused"], reverse=True)
+            else:
+                candidates = by_score
         else:
             for c in candidates:
                 # keyword-only (BM25) hits have no cosine score; give them a neutral one

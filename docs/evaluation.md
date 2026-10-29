@@ -211,3 +211,25 @@ RELEVANCE_THRESHOLD=0.30
 **Citations.** The answer's `[n]` markers are now reconciled with the source list (`align_citations` in `rag_pipeline.py`): only the sources the answer cites are listed, renumbered in order of first use, and video frames are always kept. With the reranker on, the "match" percentage on each source is the reranker's relevance probability instead of a raw MiniLM cosine, so a correct source shows about 85-90% rather than 22-52%.
 
 **Multi-part questions.** The system prompt now has a rule to answer every part of a multi-part question separately with exact figures (rule 7 in `llm_service.py`). Before it, a question such as "stipend for internship, full time?" got only one of the two answers. On a copy of the SalesRaga job description (2 questions, so anecdotal, not a benchmark), both `qwen2.5:1.5b` and `qwen2.5:3b` then answered both parts; `3b` quoted the document exactly with citations, while `1.5b` added an invented sentence on the requirements question. The local `backend/.env` therefore uses `LLM_MODEL=qwen2.5:3b`; the code default stays `qwen2.5:1.5b` for low-RAM machines. This is not a measured accuracy gain: run `eval.run generation` before relying on it.
+
+## 10. Reranker robustness on short documents
+
+**Problem.** On a real six-chunk job-description PDF, "what are their requirements" was answered "not found" in the chat, because after query rewriting the fine-tuned reranker scored the chunk containing the requirements 0.04 (it scored 0.73 for the original phrasing). The old per-chunk cutoff (0.30) then dropped that chunk before the LLM saw it. The reranker was tuned and benchmarked on QASPER, which has long papers with many chunks; on a short document it is much less reliable.
+
+**Test.** 12 hand-written questions about that PDF (requirements, stipend, how to apply, "tell me about the company", with several phrasings each), counting how often the chunk containing the answer is among the chunks sent to the LLM (top 4, after the relevance gate). This is one document and 12 questions, so it is indicative, not a benchmark.
+
+| Setup | Answer chunk reaches the LLM (of 12) | QASPER hit@5 |
+|---|---:|---:|
+| Dense only | 6 | n/a |
+| Hybrid (dense + BM25), no reranker | 9 | n/a |
+| Hybrid + original reranker, 0.30 per-chunk cutoff | 4 | 0.34 |
+| Hybrid + fine-tuned reranker, 0.30 per-chunk cutoff (before) | 8 | 0.45 |
+| Fine-tuned reranker alone, best-chunk gate only | 9 | 0.45 |
+| Blend, reranker weight 1 | 11 | 0.32 |
+| **Blend, reranker weight 2 (shipped)** | **11** | **0.39** |
+| Blend, reranker weight 3 | 9 | 0.42 |
+| Blend, reranker weight 5 | 9 | 0.43 |
+
+**Change.** The final order is a weighted reciprocal-rank fusion of the hybrid ranking and the reranker ranking (`RERANK_FUSION`, `RERANK_FUSION_WEIGHT=2`), and the relevance threshold gates only the *best* chunk instead of every chunk (`per_chunk_threshold=False` in the pipeline). The displayed score is still the reranker's probability. This trades benchmark score on long papers (0.45 to 0.39 hit@5) for robustness on short documents; both numbers are in the table so the trade-off is visible. Weights 3 and 5 recover more of the QASPER score but lose the short-document gain.
+
+**Caveats.** The abstention threshold was calibrated on the reranker's raw probability, which is unchanged. The blend only affects ordering. Which weight is best for real lecture material is unknown until there is an in-domain labelled set (see TASKS item 29).

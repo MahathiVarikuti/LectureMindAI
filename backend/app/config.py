@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # evaluation work (see docs/evaluation.md) and can be enabled without code changes.
     use_hybrid: bool = False
     use_reranker: bool = False
+    # Blend the reranker's ranking with the hybrid (dense + BM25) ranking instead of trusting the
+    # reranker alone: one erratic reranker score then cannot push the right chunk out.
+    rerank_fusion: bool = True
+    rerank_fusion_weight: float = 2.0  # reranker rank counts this many times the hybrid rank
     use_grounding_check: bool = False
     # Minimum score of the best chunk, otherwise we answer "not found" without calling the LLM.
     # Unset -> 0.125 when the reranker is on (reranker probability), else 0.15 (cosine, MiniLM).
@@ -138,6 +142,8 @@ CANDIDATE_K = settings.candidate_k
 TOP_K = settings.top_k
 USE_HYBRID = settings.use_hybrid
 USE_RERANKER = settings.use_reranker
+RERANK_FUSION = settings.rerank_fusion
+RERANK_FUSION_WEIGHT = settings.rerank_fusion_weight
 USE_GROUNDING_CHECK = settings.use_grounding_check
 RRF_K = 60
 RELEVANCE_THRESHOLD = settings.relevance_threshold  # None -> chosen per retriever mode

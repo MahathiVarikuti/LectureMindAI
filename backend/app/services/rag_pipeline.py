@@ -86,7 +86,9 @@ def answer_question(
         relevance_threshold = getattr(retriever, "relevance_threshold", None)
     chunks, abstain_reason = select_context(
         candidates, threshold=relevance_threshold,
-        per_chunk_threshold=getattr(retriever, "use_reranker", True),
+        # Gate only on the best chunk. A per-chunk cutoff on reranker scores threw away the right
+        # chunk whenever the reranker mis-scored it (see docs/evaluation.md section 10).
+        per_chunk_threshold=False,
     )
     # Visual matches come from the separate image collection (session-scoped; skipped
     # entirely when the session has no video frames).
