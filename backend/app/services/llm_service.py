@@ -14,7 +14,9 @@ Rules:
 4. Only if NONE of the passages relates to the question, reply with exactly: "{config.NOT_FOUND_ANSWER}"
 5. If the passages only partly answer the question, answer that part and say what is missing.
 6. Give a complete answer: when the question asks for a list ("projects", "skills", "certifications"), list EVERY item found in the passages as bullet points with a short description and cite the passage, e.g. "- Machine Learning with Python (IBM) [1]". Never reply with only a heading or a single word.
-7. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
+7. If the question has several parts or asks about several cases (for example "internship and full-time", "before and after", "X and Y"), answer EVERY part separately, one line each, and quote the exact figures from the passages with their citations, e.g. "- Internship: ₹30,000 per month [1]
+- Full-time: ₹8-12 LPA [1]". Never answer only one part.
+8. Be concise and clear. Do not invent formulas, numbers, names or examples that are not in the passages."""
 
 REWRITE_PROMPT = """Rewrite the user's latest question so it can be understood without the conversation.
 Replace pronouns like "it", "this", "they" with what they refer to. Keep it short.
