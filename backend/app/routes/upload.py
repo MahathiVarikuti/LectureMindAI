@@ -11,9 +11,7 @@ from app.db import sqlite
 from app.dependencies import validate_session_id
 from app.errors import AppError
 from app.limiter import limiter, upload_limit
-from app.models import UploadUrlRequest
 from app.services import ingestion
-from app.services.url_ingestion import ingest_url
 from app.utils.media import detect_modality, looks_like_pdf, safe_filename
 
 router = APIRouter()
@@ -83,10 +81,3 @@ async def upload(request: Request, file: UploadFile = File(...), session_id: str
         if os.path.exists(dest):
             os.remove(dest)
         raise
-
-
-@router.post("/upload-url")
-@limiter.limit(upload_limit)
-async def upload_url(request: Request, body: UploadUrlRequest):
-    session_id = validate_session_id(body.session_id)
-    return await run_in_threadpool(ingest_url, session_id, body.url.strip(), body.include_frames)

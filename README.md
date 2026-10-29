@@ -1,6 +1,6 @@
 # LectureMindAI
 
-**Ask questions about your lectures and get answers with citations.** Upload PDFs, audio, video, or a link to a recording, then chat with the material. Every answer points back to its source: a page number for PDFs, a timestamp for audio and video.
+**Ask questions about your lectures and get answers with citations.** Upload PDFs, audio or video, then chat with the material. Every answer points back to its source: a page number for PDFs, a timestamp for audio and video.
 
 Everything runs locally and for free: a local LLM (Ollama), local embeddings, a local vector store (ChromaDB) and SQLite. There is no LangChain or LlamaIndex. Chunking, retrieval, prompting and session handling are written directly.
 
@@ -16,7 +16,7 @@ LectureMindAI retrieves the relevant parts of *your* material first, hands only 
 
 ## Core workflow
 ```
-Upload PDF / audio / video / URL
+Upload PDF / audio / video
         ↓
 Extract text (PyMuPDF) or transcribe (Whisper) and sample frames (CLIP)
         ↓
@@ -41,7 +41,6 @@ Answer with citations (page numbers / timestamps)
 | PDF | Text extracted with PyMuPDF, split at section headings, cited by page |
 | Audio | Transcribed with faster-whisper, chunked by segment, cited by timestamp |
 | Video | Audio transcript **and** frames sampled every 7 s and embedded with CLIP |
-| URL | Downloaded with yt-dlp, then processed as audio or video |
 
 ### Chat with grounded answers
 - Follow-up questions are rewritten into standalone questions using chat history ("what about its cost?" becomes a full question)
@@ -68,8 +67,8 @@ Added from the evaluation work, switched on with environment variables:
 Next.js (Tailwind, Axios, react-markdown)
         |  session_id (UUID in localStorage) on every request
         v
-FastAPI  --- /upload /upload-url /query /documents /history /health
-   |-- ingestion: PyMuPDF | ffmpeg + faster-whisper | CLIP (frames) | yt-dlp
+FastAPI  --- /upload /query /documents /history /health
+   |-- ingestion: PyMuPDF | ffmpeg + faster-whisper | CLIP (frames)
    |-- ChromaDB   text_chunks (MiniLM) | image_frames (CLIP)   <- separate collections
    |-- SQLite     chat history + document ownership
    `-- Ollama     qwen2.5:1.5b  (/api/generate, stream: false)
@@ -86,7 +85,6 @@ Details: [docs/architecture.md](docs/architecture.md). Security model and its li
 | Image embeddings | CLIP, `openai/clip-vit-base-patch32` |
 | Speech to text | faster-whisper (`base`) with ffmpeg |
 | PDF parsing | PyMuPDF |
-| URL import | yt-dlp |
 | Vector store | ChromaDB (two collections) |
 | Chat history | SQLite |
 | Deployment | Docker Compose (frontend, backend, Ollama) |
@@ -101,7 +99,6 @@ Details: [docs/architecture.md](docs/architecture.md). Security model and its li
 | sentence-transformers | `services/embedding_service.py` | embed chunks and queries; also the reranker and NLI cross-encoders |
 | ChromaDB | `db/chroma.py`, `services/retrieval_service.py` | store and search vectors |
 | rank-bm25 | `services/retrieval_service.py` | optional keyword search for hybrid retrieval |
-| yt-dlp | `services/url_ingestion.py` | download audio or video from a URL |
 | SlowAPI | `limiter.py` | per-IP rate limits |
 | Ollama (HTTP) | `services/llm_service.py` | answer generation and query rewriting |
 
@@ -182,7 +179,6 @@ Trained weights are written to the git-ignored `backend/models/`.
 | Method | Endpoint | Purpose |
 |---|---|---|
 | POST | `/upload` | upload a PDF, audio or video file |
-| POST | `/upload-url` | import media from a URL |
 | POST | `/query` | ask a question (optionally scoped to chosen documents) |
 | GET | `/documents` | list the session's documents |
 | DELETE | `/documents/{id}` | delete a document (vectors and file) |
@@ -273,13 +269,12 @@ LectureMindAI/
 ```
 
 ## Known Limitations
-- Audio, video and URL ingestion are implemented and tested with fakes; the PDF path is the one exercised end to end with real models
+- Audio and video ingestion are implemented and tested with fakes; the PDF path is the one exercised end to end with real models
 - With `USE_HYBRID=1` the relevance threshold is weaker (keyword-only matches get a neutral score), so the LLM's own refusal does more of the work
 - The `model` field of `/query` is client-controlled; do not expose the API publicly without restricting it
 - Sessions are browser-local UUIDs: clearing site data or switching browsers loses access to earlier documents and history. This is a deliberate V1 trade-off, not real authentication
 - Scanned PDFs (no text layer) are rejected; there is no OCR
 - Retrieval quality is still limited (hit@5 of 0.45 on QASPER at best), and the hallucination flag is only moderately reliable, so treat it as a warning, not a guarantee
-- yt-dlp import is for your own or openly-licensed content only
 
 ## What I Learned
 - Building a RAG pipeline end to end without a framework: chunking, embeddings, retrieval, prompting and sessions

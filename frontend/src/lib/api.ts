@@ -77,10 +77,6 @@ export const uploadFile = (file: File) => {
   return api.post("/upload", form, { timeout: 0 }).then((r) => r.data);
 };
 
-export const uploadUrl = (url: string, includeFrames: boolean) =>
-  api.post("/upload-url", { url, session_id: getSessionId(), include_frames: includeFrames }, { timeout: 0 })
-    .then((r) => r.data);
-
 export const askQuestion = (query: string, selectedDocuments: string[]) =>
   api.post<QueryResponse>("/query", { query, session_id: getSessionId(), selected_documents: selectedDocuments },
     { timeout: 180000 }).then((r) => r.data);

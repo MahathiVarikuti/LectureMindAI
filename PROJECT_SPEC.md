@@ -24,7 +24,6 @@ You are my project architect and lead engineer. Build this project completely, f
 - Upload and ingest PDF documents (text extraction, chunking, embedding, storage)
 - Upload and ingest audio files (transcription via Whisper, chunking, embedding, storage)
 - Upload and ingest video files (audio track → transcription pipeline; sampled frames → CLIP embedding, stored separately)
-- Ingest audio/video from a user-provided URL via `yt-dlp` (scoped to the user's own recordings or openly-licensed content — include a disclaimer in the UI, do not market as a general downloader)
 - Natural-language chat interface with conversational follow-up support (query rewriting using chat history)
 - Grounded answer generation using a locally-hosted LLM (Ollama), refusing to answer when retrieved context doesn't cover the question
 - Source citation display: page number for PDF sources, timestamp for audio/video sources
@@ -72,7 +71,6 @@ You are my project architect and lead engineer. Build this project completely, f
 - **Video frame embeddings:** CLIP via `open_clip` or `transformers`, model `openai/clip-vit-base-patch32` (smaller variant, chosen for CPU inference speed)
 - **PDF text extraction:** PyMuPDF (`fitz`)
 - **Video/audio processing:** `ffmpeg` (system dependency) for audio track extraction and frame sampling
-- **URL-based media acquisition:** `yt-dlp`
 
 ### DevOps / Infra
 - Docker (separate `Dockerfile` for backend and frontend)
@@ -135,7 +133,6 @@ Every entry in `image_frames` must include:
 - **PDF:** extract text per page (PyMuPDF) → chunk with overlap → embed (SentenceTransformers) → store with `page` metadata.
 - **Audio:** transcribe with `faster-whisper` (returns segments with start/end timestamps) → chunk transcript text (respecting segment boundaries where possible) → embed → store with `timestamp_start`/`timestamp_end` metadata.
 - **Video:** split into (a) audio track → run through the Audio pipeline above, and (b) sampled frames (default: 1 frame per 7 seconds, configurable via env) → CLIP embed each frame → store in `image_frames`.
-- **URL input:** use `yt-dlp` to download audio (or video, if frame extraction is requested) to a temp file, then feed into the pipelines above as if locally uploaded. Clean up temp files after processing.
 
 ### 4.6 Chunking
 - Overlap-based chunking (configurable `chunk_size`, `chunk_overlap` via env, sensible defaults e.g. 1000/200 characters). Comment on the trade-off of chunk size vs. overlap in code.
@@ -160,7 +157,6 @@ Every entry in `image_frames` must include:
 All endpoints require `session_id` (query param, form field, or JSON body field depending on endpoint — your judgment, but be consistent).
 
 - `POST /upload` — multipart form: `file`, `session_id`. Detects file type (PDF/audio/video) by extension/MIME and routes to the correct ingestion pipeline. Returns `{ document_id, filename, chunks, modality, message }`.
-- `POST /upload-url` — JSON: `{ url, session_id }`. Downloads via `yt-dlp`, routes into ingestion. Same response shape as `/upload`.
 - `POST /query` — JSON: `{ query, session_id, selected_documents?: string[] }`. Returns `{ answer, sources, used_documents, context }`.
 - `GET /documents?session_id=...` — returns list of documents belonging to this session only: `[{ document_id, filename, modality, chunk_count, uploaded_at }]`.
 - `DELETE /documents/{document_id}?session_id=...` — verifies the document belongs to this session before deleting; removes vector entries from BOTH collections (if applicable) AND the file from disk. 404 if not found or not owned by this session (do not leak existence of other sessions' documents — same 404 either way).
@@ -178,7 +174,7 @@ Implement all of the following — these are not optional:
 - Every read/write to documents and chat history MUST be filtered by `session_id`. No endpoint should ever return or modify data belonging to a different session. Write a test that explicitly verifies session A cannot see or delete session B's documents.
 
 ### 6.2 Rate Limiting
-- Apply rate limiting to `/upload`, `/upload-url`, and `/query` (the expensive endpoints) using a free/open-source library (e.g., `slowapi`). Reasonable default: e.g., 10 requests/minute per session_id or IP for `/query`, lower for `/upload`. Make limits configurable via `.env`.
+- Apply rate limiting to `/upload` and `/query` (the expensive endpoints) using a free/open-source library (e.g., `slowapi`). Reasonable default: e.g., 10 requests/minute per session_id or IP for `/query`, lower for `/upload`. Make limits configurable via `.env`.
 
 ### 6.3 Secrets Management
 - All configuration (Ollama URL, model names, storage paths, CORS origins, rate limit values, resource limits) must live in `.env`, loaded via `pydantic-settings`. Never hardcode. Provide a complete `.env.example` with safe defaults and comments explaining each variable. Ensure `.env` is in `.gitignore`.
@@ -198,7 +194,7 @@ Implement and enforce (configurable via `.env`, with these defaults):
 - Enforce all limits in Section 6.4 BEFORE expensive processing begins (check file size/duration first, fail fast).
 - Set reasonable timeouts on Ollama and Whisper calls; handle timeout/failure gracefully with a proper error response, not a hang or crash.
 - CORS: in development, permissive is acceptable; production config must restrict `allow_origins` to the actual deployed frontend origin(s) only — implement this as an environment-driven setting, not hardcoded `*`.
-- Wrap all external calls (Ollama, ffmpeg, yt-dlp, file I/O) in proper error handling with meaningful error messages returned to the client (never a raw stack trace).
+- Wrap all external calls (Ollama, ffmpeg, file I/O) in proper error handling with meaningful error messages returned to the client (never a raw stack trace).
 
 ---
 
@@ -232,7 +228,6 @@ Build in this exact sequence — later steps depend on earlier ones being correc
 7. `/query` endpoint: full text-only RAG loop working end-to-end for PDFs.
 8. Audio ingestion: `faster-whisper` transcription, timestamp segmentation, chunking, embedding into `text_chunks` with `modality: "audio"`.
 9. Video ingestion: ffmpeg audio extraction (→ step 8 pipeline) + frame sampling + CLIP embedding into `image_frames`.
-10. URL-based ingestion via `yt-dlp`, feeding into steps 8/9.
 11. Cross-modal merged retrieval in `/query` (query both collections, normalize, merge).
 12. SQLite chat history (replace any temporary in-memory approach), wire into `/query`.
 13. `/documents` (list) and `DELETE /documents/{id}` endpoints, session-scoped, with correct file deletion (verify the actual file is removed from disk, not just the vector entries).
@@ -291,3 +286,4 @@ V1 defaults above are unchanged (MiniLM, dense, `qwen2.5:1.5b`). After V1 an eva
 - **Thresholds:** dense relevance 0.15 (cosine; benchmark-optimal 0.30), reranker 0.125, grounding threshold to be re-tuned for the fine-tuned checker. See `docs/evaluation.md`.
 - **Constraint:** all training must run on a CPU laptop (frozen embedding matrices, small batches, one process at a time).
 
+> **Scope change:** URL ingestion (`yt-dlp`, `POST /upload-url`) was implemented and then removed from the project; media must be uploaded as files. References to URL input elsewhere in this spec are obsolete.

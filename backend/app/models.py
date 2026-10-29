@@ -7,9 +7,3 @@ class QueryRequest(BaseModel):
     session_id: str
     selected_documents: list[str] | None = None
     model: str | None = None  # optionally override an allowlisted Ollama model
-
-
-class UploadUrlRequest(BaseModel):
-    url: str = Field(max_length=2000)
-    session_id: str
-    include_frames: bool = False  # also download video and index frames with CLIP

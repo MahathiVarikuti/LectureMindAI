@@ -20,5 +20,4 @@ pillow
 # Ingestion
 pymupdf
 faster-whisper
-yt-dlp
 requests

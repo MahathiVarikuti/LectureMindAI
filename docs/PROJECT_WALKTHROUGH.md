@@ -363,3 +363,5 @@ See §5-G.
 - "Works for audio/video/URL end to end" — only tested with fakes.
 - "Tested with ~12 users" — unverifiable from the repo.
 - "Hallucination-free" / any accuracy number for the **current default** configuration — the committed eval numbers are for BGE+hybrid+rerank, and the dense 0.15 threshold is uncalibrated.
+
+> **Update:** URL ingestion (`yt-dlp`, `POST /upload-url`, `url_ingestion.py`, the SSRF guard) has since been removed from the project. Any mention of URL import above is obsolete.

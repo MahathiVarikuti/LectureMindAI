@@ -199,65 +199,6 @@ class TestAudioVideoUrl:
         assert data["sources"] and all(s["modality"] == "video_frame" for s in data["sources"])
         assert llm == []
 
-    def test_url_ingestion_and_cleanup(self, client, session_a, llm, fake_media, monkeypatch):
-        made = []
-
-        def fake_download(url, tmp, want_video):
-            made.append(tmp)
-            f = tmp / "clip.m4a"
-            f.write_bytes(b"audio")
-            return f, "Remote lecture.m4a"
-
-        monkeypatch.setattr("app.services.url_ingestion._download", fake_download)
-        monkeypatch.setattr("app.services.url_ingestion.validate_public_url", lambda u: None)
-        r = client.post("/upload-url", json={"url": "https://example.com/v", "session_id": session_a})
-        assert r.status_code == 200 and r.json()["modality"] == "audio"
-        assert made and not made[0].exists()  # temp dir removed
-
-    def test_url_download_revalidates_redirect_target(self, monkeypatch, tmp_path):
-        class FakeYoutubeDL:
-            def __init__(self, options):
-                self.options = options
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-            def extract_info(self, url, download):
-                if not download:
-                    return {"webpage_url": "http://127.0.0.1/private", "duration": 1, "title": "x"}
-                return {}
-
-        class FakeDlp:
-            YoutubeDL = FakeYoutubeDL
-
-        import sys
-        import types
-        monkeypatch.setitem(sys.modules, "yt_dlp", FakeDlp)
-        monkeypatch.setitem(
-            sys.modules, "yt_dlp.utils", types.SimpleNamespace(DownloadError=Exception)
-        )
-        checked = []
-
-        def check(url):
-            checked.append(url)
-            if "127.0.0.1" in url:
-                raise AppError(400, "private")
-
-        monkeypatch.setattr("app.services.url_ingestion.validate_public_url", check)
-        from app.services.url_ingestion import _download
-
-        with pytest.raises(AppError):
-            _download("https://example.com/video", tmp_path, want_video=False)
-        assert checked[-1] == "http://127.0.0.1/private"
-
-    @pytest.mark.parametrize("url", ["http://127.0.0.1/secret", "http://localhost:8000/x", "ftp://example.com/a"])
-    def test_url_rejects_local_and_non_http(self, client, session_a, url):
-        r = client.post("/upload-url", json={"url": url, "session_id": session_a})
-        assert r.status_code == 400
-
 
 class TestSessionIsolation:
     def test_session_b_cannot_see_query_or_delete_session_a(self, client, session_a, session_b, pdf_bytes, llm):

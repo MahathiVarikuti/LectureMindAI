@@ -9,7 +9,7 @@
 - [x] 7. /query endpoint (PDF RAG)
 - [x] 8. Audio ingestion
 - [x] 9. Video ingestion
-- [x] 10. URL ingestion (yt-dlp)
+- [x] 10. ~~URL ingestion (yt-dlp)~~ removed from the project (upload files instead)
 - [x] 11. Cross-modal retrieval
 - [x] 12. SQLite chat history
 - [x] 13. /documents list + DELETE

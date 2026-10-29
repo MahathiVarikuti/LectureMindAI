@@ -17,10 +17,7 @@
 
 On the verification machine, ffmpeg 9.0.2 was already installed and on `PATH`.
 Generated 20-second WAV and MP4 fixtures passed `ffprobe` duration checks; MP4 audio
-extraction and three sampled frames also completed successfully. The public Blender
-Foundation Big Buck Bunny URL
-`https://www.youtube.com/watch?v=aqz-KE-bpKQ` downloaded successfully through yt-dlp.
-
+extraction and three sampled frames also completed successfully. 
 The real `WHISPER_MODEL=tiny` transcription path is currently blocked on Python 3.14
 by the installed dependency combination `faster-whisper 1.2.1` and `av 19.0.2`:
 PyAV raises `TypeError: open() got an unexpected keyword argument 'metadata_errors'`.

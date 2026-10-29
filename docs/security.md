@@ -16,8 +16,7 @@ Accounts with password hashing or OAuth; signed, expiring tokens (for example JW
 - **Rate limiting** (slowapi): `/query` and `/upload*` per IP, configurable (`RATE_LIMIT_QUERY`, `RATE_LIMIT_UPLOAD`); HTTP 429.
 - **Resource limits**, checked before expensive work: PDF 25 MB, media size 500 MB, media duration 30 min, 500 MB and 20 documents per session; HTTP 413. Uploads are streamed to disk in 1 MB blocks, never read whole into RAM. Heavy ingestion runs one job at a time.
 - **File validation** is server-side: extension allow-list, `%PDF-` signature check, ffprobe must be able to parse media. Client MIME types are ignored. Filenames are sanitised and stored as `<session>/<uuid>_<name>`; deletes are confined to the session's folder.
-- **URL import**: http(s) only; hosts resolving to private/loopback addresses are rejected (basic SSRF guard); live streams rejected; size and duration capped; temp files always removed. For your own or openly-licensed content only.
 - **Secrets/config**: everything in environment variables (`.env` is git-ignored); nothing hardcoded.
 - **CORS**: restricted to `CORS_ORIGINS` (use `*` only in development).
-- **Errors**: external calls (Ollama, ffmpeg, yt-dlp, Whisper) have timeouts and map to 4xx/5xx JSON messages; unexpected errors return a generic 500 without a stack trace.
+- **Errors**: external calls (Ollama, ffmpeg, Whisper) have timeouts and map to 4xx/5xx JSON messages; unexpected errors return a generic 500 without a stack trace.
 - **Rendering**: model output is rendered with `react-markdown` (no raw HTML).

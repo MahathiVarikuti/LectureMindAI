@@ -24,7 +24,6 @@ Documents and chat history are scoped by `session_id` in three places: SQLite `W
 - **PDF**: PyMuPDF per page -> structure-aware chunking with overlap -> embed -> store with `page`.
 - **Audio**: ffprobe duration check (before any heavy work) -> faster-whisper (CPU, int8) -> segment-respecting chunking (`chunk_segments`) -> embed -> store with `timestamp_start/end`.
 - **Video**: duration check -> ffmpeg extracts the audio track (-> audio pipeline, modality `video_transcript`) and samples frames (`FRAME_SAMPLE_INTERVAL`, default 7 s) -> CLIP -> `image_frames`.
-- **URL**: yt-dlp downloads audio (video if frames are requested) into a temp dir after probing duration; the URL must be public http(s); the temp dir is always removed.
 
 All limits (size, duration, storage, document count, concurrent ingestions) are enforced before expensive work; failures purge partial vectors and files.
 
