@@ -88,3 +88,14 @@ class TestSectionAwareChunking:
         text = "Gradient descent minimises a loss. " * 60
         chunks = chunk_text(text, chunk_size=300, overlap=50, min_chars=1)
         assert len(chunks) > 1 and all(len(c) <= 300 for c in chunks)
+
+
+def test_friendly_download_error_strips_colour_codes_and_explains():
+    from app.services.url_ingestion import friendly_download_error
+
+    raw = "[0;31mERROR:[0m [youtube] bZ70_feA5Co: This video is not available"
+    message = friendly_download_error(Exception(raw))
+    assert "" not in message and "ERROR" not in message
+    assert "not available to download" in message
+    assert friendly_download_error(Exception("[0;31mERROR:[0m boom happened")) == "Could not download that URL: boom happened"
+

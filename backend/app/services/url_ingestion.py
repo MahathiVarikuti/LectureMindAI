@@ -6,6 +6,7 @@ is not a general-purpose downloader. The URL is checked to be a public http(s) a
 to a temp directory that is always removed afterwards.
 """
 import ipaddress
+import re
 import shutil
 import socket
 import tempfile
@@ -29,6 +30,22 @@ def validate_public_url(url: str) -> None:
         raise AppError(400, "Could not resolve that URL's host.") from exc
     if not all(ipaddress.ip_address(a).is_global for a in addresses):
         raise AppError(400, "URLs pointing at private or local addresses are not allowed.")
+
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m|\[[0-9;]*m")
+
+
+def friendly_download_error(exc) -> str:
+    """Turn a yt-dlp error into a short message: no colour codes, no `ERROR: [site] id:` prefix."""
+    text = _ANSI.sub("", str(exc))
+    text = re.sub(r"^\s*ERROR:\s*(\[[^\]]+\]\s*[\w-]*:?\s*)?", "", text).strip()
+    lowered = text.lower()
+    if "not available" in lowered or "private video" in lowered or "unavailable" in lowered:
+        return ("That video is not available to download (removed, private, age- or region-restricted). "
+                "Try a different link, or upload the file directly.")
+    if "sign in" in lowered or "confirm you" in lowered:
+        return "That site requires you to sign in, so it cannot be downloaded. Upload the file directly instead."
+    return f"Could not download that URL: {text[:200]}"
 
 
 def _download(url: str, tmp: Path, want_video: bool) -> tuple[Path, str]:
@@ -58,7 +75,7 @@ def _download(url: str, tmp: Path, want_video: bool) -> tuple[Path, str]:
             validate_public_url(info.get("webpage_url") or info.get("url") or url)
             ydl.extract_info(url, download=True)
     except DownloadError as exc:
-        raise AppError(400, f"Could not download that URL: {str(exc)[:200]}") from exc
+        raise AppError(400, friendly_download_error(exc)) from exc
     files = [p for p in tmp.iterdir() if p.is_file() and not p.name.endswith((".part", ".ytdl"))]
     if not files:
         raise AppError(400, "Nothing was downloaded (the file may exceed the size limit).")
